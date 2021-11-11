@@ -942,7 +942,7 @@ def process_cna(segfile, genebed, oncolist, gain, amp, htz, hmz, ProcCNA, outdir
     if os.path.isfile(ProcCNA):
         exit_code = subprocess.call(cmd, shell=True)
         if exit_code:
-            sys.exit('Could not process CNAs. Try loading module cbioportal')
+            sys.exit('Could not process CNAs.')
     else:
         raise FileNotFoundError('Cannot find R script path {}'.format(ProcCNA))
        
@@ -969,7 +969,7 @@ def process_rna(gepfile, enscon, genelist, ProcRNA, outdir):
     if os.path.isfile(ProcRNA):
         exit_code = subprocess.call(cmd, shell=True)
         if exit_code:
-            sys.exit('Could not process RNAseq expression. Try loading module cbioportal')
+            sys.exit('Could not process RNAseq expression.')
     else:
         raise FileNotFoundError('Cannot find R script path {}'.format(ProcRNA))
     
@@ -995,7 +995,7 @@ def process_fusion(fusfile, entcon, min_fusion_reads, ProcFusion, outdir):
     if os.path.isfile(ProcFusion):
         exit_code = subprocess.call(cmd, shell=True)
         if exit_code:
-            sys.exit('Could not process fusions. Try loading module cbioportal')
+            sys.exit('Could not process fusions.')
     else:
         raise FileNotFoundError('Cannot find R script path {}'.format(ProcFusion))
 
@@ -1023,7 +1023,7 @@ def process_mutations(maffile, tglpipe, ProcMAF, outdir):
     if os.path.isfile(ProcMAF):
         exit_code = subprocess.call(cmd, shell=True)
         if exit_code:
-            sys.exit('Could not process mutations. Try loading module cbioportal')
+            sys.exit('Could not process mutations.')
     else:
         raise FileNotFoundError('Cannot find R script path {}'.format(ProcMAF))
     
@@ -1505,10 +1505,10 @@ def make_import_folder(args):
     oncokb_token = get_token(token)
     
     # annotate mafs with oncokb-annotate        
-    maf_annotation = subprocess.call('MafAnnotator.py -i {0} -o {1} -c {2} -b {3}'.format(maf_input_annotation, maffile, os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell=True)
+    maf_annotation = subprocess.call('MafAnnotator -i {0} -o {1} -c {2} -b {3}'.format(maf_input_annotation, maffile, os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell=True)
     # check exit code
     if maf_annotation:
-        sys.exit('Error when running MafAnnotator.py. Try loading module oncokb-annotator')
+        sys.exit('Error when running MafAnnotator.')
     else:
         print('Annotated variants with MafAnnotator')
     
@@ -1554,9 +1554,9 @@ def make_import_folder(args):
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
     if os.path.isfile(os.path.join(suppdir, 'data_CNA_short.txt')):
-        cna_annotation = subprocess.call('CnaAnnotator.py -i {0} -o {1} -c {2} -b {3}'.format(os.path.join(suppdir, 'data_CNA_short.txt'), os.path.join(suppdir, 'data_CNA_oncoKB.txt'), os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell = True)  
+        cna_annotation = subprocess.call('CnaAnnotator -i {0} -o {1} -c {2} -b {3}'.format(os.path.join(suppdir, 'data_CNA_short.txt'), os.path.join(suppdir, 'data_CNA_oncoKB.txt'), os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell = True)  
         if cna_annotation:
-            sys.exit('Error when running MafAnnotator.py. Try loading module oncokb-annotator')
+            sys.exit('Error when running CnaAnnotator.')
         else:
             print('Annotated CNAs with CnaAnnotator')
     else:
