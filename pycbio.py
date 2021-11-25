@@ -248,23 +248,33 @@ def write_minimal_clinical_information(outputfile, mapfile, data_type, centre):
     content = infile.read().rstrip().split('\n')
     infile.close()
     S = [i.split(',')[0:2] for i in content]
-    T = []
+        
     if data_type == 'patient':
+        # make a list of unique records
+        U = []
+        for i in S:
+            record = [i[0], centre]
+            if record not in U:
+                U.append(record)
         T = ['#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
              '#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
              '#STRING\tSTRING\tNUMBER\tSTRING\tSTRING']
         T.append('#1' + ('\t1' * (len(T[0].split('\t')) -1)))     
         T.append('PATIENT_ID\tCENTRE\tAGE\tSEX\tETHNICITY')
-        for i in S:
-            T.append('\t'.join([i[0], centre] + [''] * (len(T[0].split('\t')) - 2)))
     elif data_type == 'sample':
+        # make a list of unique records
+        U = []
+        for i in S:
+            record = [i[0], i[1]]
+            if record not in U:
+                U.append(record)
         T = ['#Patient Identifier\tSample Identifier\tCosmic Signature\tPRIMARY SITE\tCANCER TYPE\tCLOSEST TCGA\tSAMPLE ANATOMICAL SITE\tSAMPLE PRIMARY OR METASTASIS\tTREATMENT STATUS\tPATHOLOGICAL REVIEW\tPRIOR CLINCAL TEST RESULTS\tMEAN COVERAGE\tPCT V7 ABOVE 80X\tPCT CALLABILITY\tSEQUENZA PURITY FRACTION\tSEQUENZA PLOIDY\tTMB PER MB\tHRD SCORE\tMSI STATUS',
              '#Patient Identifier\tSample Identifier\tCosmic Signature\tPRIMARY SITE\tCANCER TYPE\tCLOSEST TCGA\tSAMPLE ANATOMICAL SITE\tSAMPLE PRIMARY OR METASTASIS\tTREATMENT STATUS\tPATHOLOGICAL REVIEW\tPRIOR CLINCAL TEST RESULTS\tMEAN COVERAGE\tPCT V7 ABOVE 80X\tPCT CALLABILITY\tSEQUENZA PURITY FRACTION\tSEQUENZA PLOIDY\tTMB PER MB\tHRD SCORE\tMSI STATUS',
              '#STRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tSTRING']
         T.append('#1' + ('\t1' * (len(T[0].split('\t')) -1)))     
         T.append('PATIENT_ID\tSAMPLE_ID\tCOSMIC_SIGS\tCANCER_TYPE\tCANCER_TYPE_DETAILED\tCLOSEST_TCGA\tSAMPLE_ANATOMICAL_SITE\tSAMPLE_PRIMARY_OR_METASTASIS\tTREATMENT_STATUS\tPATHOLOGICAL_REVIEW\tPRIOR_CLINCAL_TEST_RESULTS\tMEAN_COVERAGE\tPCT_V7_ABOVE_80X\tFRAC_CALLABILITY\tSEQUENZA_PURITY_FRACTION\tSEQUENZA_PLOIDY\tTMB_PER_MB\tHRD_SCORE\tMSI_STATUS')
-        for i in S:
-            T.append('\t'.join([i[0], i[1]] + [''] * (len(T[0].split('\t')) - 2)))
+    for i in U:
+        T.append('\t'.join(i + [''] * (len(T[0].split('\t')) - 2)))
     newfile = open(outputfile, 'w')
     newfile.write('\n'.join(T))
     newfile.close()
