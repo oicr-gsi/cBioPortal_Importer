@@ -191,6 +191,12 @@ def write_cases(outputfile, study, mapfile, data_type):
         name = 'Samples profiled for mutations'
         description = 'This is this case list that contains all samples that are profiled for mutations.'
         stable_id = '{0}_sequenced'.format(study)
+    elif data_type == 'fusion':
+        # make a list of samples for which fusion files are available
+        samples = [i.split(',')[1] for i in content if i.split(',')[5].upper() != 'NA']
+        name = 'Samples profiled for mutations'
+        description = 'This is this case list that contains all samples that are profiled for fusion.'
+        stable_id = '{0}_fusion'.format(study)
     elif data_type == 'rna':
         # make a list of samples for which rsem files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[4].upper() != 'NA']
@@ -1428,6 +1434,7 @@ def make_import_folder(args):
     write_cases(os.path.join(casedir, 'cases_cna.txt'), study, mapfile, 'cna')
     write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), study, mapfile, 'cna_seq')
     write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), study, mapfile, 'cna_seq_rna')
+    write_cases(os.path.join(casedir, 'cases_fusion.txt'), study, mapfile, 'fusion')
     print('wrote cases')
 
     # write minimal clinical information
