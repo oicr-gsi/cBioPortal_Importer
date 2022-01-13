@@ -233,11 +233,151 @@ def write_cases(outputfile, study, mapfile, data_type):
         newfile.write('\n'.join(L))
         newfile.close()
     
-
-
-def write_minimal_clinical_information(outputfile, mapfile, data_type, centre):
+    
+    
+def get_clinical_data(clinical_info):
     '''
-    (str, str, str, str) -> None
+    (str) -> dict
+    
+    Returns a dictionary with clinical information for patient,sample pairs
+    
+    Parameters
+    ----------
+    - clinical info (str): Path to the file with sample clinical information
+    '''
+    
+    # create a dict to store clinical info {'patient;sample': 'field': value}
+    D = {}
+    
+    infile = open(clinical_info)    
+    header = infile.readline().rstrip().split('\t')
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            patient, sample = line[0], line[1]
+            ID = patient + ';' + sample
+            D[ID] = {}
+            for i in range(len(line)):
+                if i >=2:
+                    D[ID][header[i]] = line[i]
+    infile.close()
+    return D
+
+
+def map_column_data_type(sample_info):
+    '''
+    (dict) -> dict
+    
+    Returns a dictionary with the type of the data corresponding to each clinical field in sample information
+        
+    Parameters
+    ----------    
+    - sample_info (dict): Dictionary with patient and sample information. Populates the sample clinical file
+    '''
+    
+    data_type = {}
+    for i in sample_info:
+        for j in sample_info[i]:
+            try:
+                float(sample_info[i][j])
+                data_type[j] = 'FLOAT'
+            except:
+                data_type[j] = 'STRING'
+    return data_type
+
+
+def list_column_names(sample_info):
+    '''
+    (dict) -> list
+    
+    Returns a list of fields with clinical sample information from the sample_info dictionary
+   
+    Parameters
+    ----------    
+    - sample_info (dict): Dictionary with patient and sample information. Populates the sample clinical file
+    '''
+    
+    # make a list of column names
+    c = [list(sample_info[i].keys()) for i in sample_info]
+    column_names = []
+    for i in c:
+        column_names.extend(i)
+        column_names = list(set(column_names))
+    return column_names
+
+
+def check_column_names(column_names):
+    '''
+    (list) -> None
+    
+    Raise an Error if the column names of the user clinical data file includes MUTATION_COUNT or FRACTION_GENOME_ALTERED 
+    These two fields are auto-populated and cannot be in the data_clinical_samples.txt file
+    
+    Parameters
+    ----------
+    - column_names (list): List of column names in the clinical samples file
+    '''
+    
+    # check if column names include banned columns
+    if 'mutation_count' in list(map(lambda x: x.lower(), column_names)) or 'fraction_genome_altered' in list(map(lambda x: x.lower(), column_names)):
+        raise ValueError('MUTATION_COUNT and FRACTION_GENOME_ALTERED are auto-populated clinical attributes and are banned from clinical data files')
+
+def map_columns_to_header(column_names, header):
+    '''
+    (list, list) -> dict
+    
+    Returns a dictionary with the index of the clinical fields of the user clinical sample information file
+    in the header of the data_clinical_samples.txt if present
+        
+    Parameters
+    ----------
+    - column_names (list): List of column names in the user clinical sample information file
+    - header (list): Lists of column names, data_types and priority from the header of the data_clinical_samples.txt file
+    '''
+    
+    positions = {}
+    for i in column_names:
+        for j in range(len(header)):
+            for k in range(len(header[j])):
+                if i.lower() == header[j][k].replace('#', '').lower():
+                    positions[i] = k
+    return positions
+
+
+
+def update_clinical_sample_header(column_names, positions, header, data_type):
+    '''
+    (list, dict, list, dict)
+
+    Returns an updated header including the clinical fields from column_names and an updated dictionary positions
+    with the index of these fields in header    
+        
+    Parameters
+    ----------
+    - column_names (list): List of column names in the user clinical sample information file
+    - positions (dict): Dictionary with index of the fields in column_names in the data_clinical_samples.txt header
+    - header (list): Lists of column names, data_types and priority from the header of the data_clinical_samples.txt file
+    - data_type (dict): Dictionary with the type of the data corresponding to each field in column names    
+   '''
+    
+    for i in column_names:
+        if i not in positions:
+            # add column name to header
+            for k in [0,1,4]:
+                header[k].append(i.upper())
+            # add data type
+            header[2].append(data_type[i])
+            # add priority
+            header[3].append('1')
+            # record postion of column
+            positions[i] = len(header[0]) - 1
+    return header, positions
+
+
+def write_minimal_clinical_information(outputfile, mapfile, data_type, centre, sample_info = None):
+    '''
+    (str, str, str, str, dict | None) -> None
     
     Write clinical files with minimal clinical information
     
@@ -247,6 +387,7 @@ def write_minimal_clinical_information(outputfile, mapfile, data_type, centre):
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - data_type(str): Sample or patient
     - centre (str): Genomic centre (eg TGL, OICR)
+    - sample_info (dict | None): Dictionary with patient and sample information. Populates the sample clinical file
     '''
     
     # make a list with sample names and libraries
@@ -268,19 +409,60 @@ def write_minimal_clinical_information(outputfile, mapfile, data_type, centre):
         T.append('#1' + ('\t1' * (len(T[0].split('\t')) -1)))     
         T.append('PATIENT_ID\tCENTRE\tAGE\tSEX\tETHNICITY')
     elif data_type == 'sample':
-        # make a list of unique records
-        U = []
-        for i in S:
-            record = [i[0], i[1]]
-            if record not in U:
-                U.append(record)
+        # build header
         T = ['#Patient Identifier\tSample Identifier\tCosmic Signature\tPRIMARY SITE\tCANCER TYPE\tCLOSEST TCGA\tSAMPLE ANATOMICAL SITE\tSAMPLE PRIMARY OR METASTASIS\tTREATMENT STATUS\tPATHOLOGICAL REVIEW\tPRIOR CLINCAL TEST RESULTS\tMEAN COVERAGE\tPCT V7 ABOVE 80X\tPCT CALLABILITY\tSEQUENZA PURITY FRACTION\tSEQUENZA PLOIDY\tTMB PER MB\tHRD SCORE\tMSI STATUS',
              '#Patient Identifier\tSample Identifier\tCosmic Signature\tPRIMARY SITE\tCANCER TYPE\tCLOSEST TCGA\tSAMPLE ANATOMICAL SITE\tSAMPLE PRIMARY OR METASTASIS\tTREATMENT STATUS\tPATHOLOGICAL REVIEW\tPRIOR CLINCAL TEST RESULTS\tMEAN COVERAGE\tPCT V7 ABOVE 80X\tPCT CALLABILITY\tSEQUENZA PURITY FRACTION\tSEQUENZA PLOIDY\tTMB PER MB\tHRD SCORE\tMSI STATUS',
              '#STRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tSTRING']
         T.append('#1' + ('\t1' * (len(T[0].split('\t')) -1)))     
         T.append('PATIENT_ID\tSAMPLE_ID\tCOSMIC_SIGS\tCANCER_TYPE\tCANCER_TYPE_DETAILED\tCLOSEST_TCGA\tSAMPLE_ANATOMICAL_SITE\tSAMPLE_PRIMARY_OR_METASTASIS\tTREATMENT_STATUS\tPATHOLOGICAL_REVIEW\tPRIOR_CLINCAL_TEST_RESULTS\tMEAN_COVERAGE\tPCT_V7_ABOVE_80X\tFRAC_CALLABILITY\tSEQUENZA_PURITY_FRACTION\tSEQUENZA_PLOIDY\tTMB_PER_MB\tHRD_SCORE\tMSI_STATUS')
-    for i in U:
-        T.append('\t'.join(i + [''] * (len(T[0].split('\t')) - 2)))
+             
+        # check if sample info was provided by user
+        if sample_info:
+            # convert header to list of lists
+            for i in range(len(T)):
+                T[i] = T[i].split('\t')
+            # make a list of column names
+            column_names = list_column_names(sample_info)
+            # map column name with data type
+            data_types = map_column_data_type(sample_info)
+            # check if column names include banned columns
+            check_column_names(column_names)
+            # get the index of the column names in the clinical samples file if present
+            positions = map_columns_to_header(column_names, T)
+            # update header with the column names and record the column names positions in the new header
+            T, positions = update_clinical_sample_header(column_names, positions, T, data_types)
+            # reformat header
+            for i in range(len(T)):
+                T[i] = '\t'.join(T[i])
+            # initialize all columns with empty values beside patient and sample Ids
+            data = {}
+            for i in S:
+                ID = i[0] + ';' + i[1]
+                data[ID] = [i[0], i[1]] + ['' for j in range((len(T[0]) - 2))]
+            # add values to clinical fields
+            for ID in sample_info:
+                 for column in sample_info[ID]:
+                     data[ID][positions[column]] = sample_info[ID][column]                
+            # make a list of clinical data
+            U = []
+            for i in data:
+                U.append('\t'.join(data[i]))
+        else:
+            # make a list of unique records
+            U = []
+            for i in S:
+                record = [i[0], i[1]]
+                if record not in U:
+                    U.append(record)
+    
+    # add data to table        
+    if sample_info:
+        for i in U:
+            T.append(i)
+    else:
+        for i in U:
+            T.append('\t'.join(i + [''] * (len(T[0].split('\t')) - 2)))
+    
     newfile = open(outputfile, 'w')
     newfile.write('\n'.join(T))
     newfile.close()
