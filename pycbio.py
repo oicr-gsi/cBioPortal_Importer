@@ -431,9 +431,6 @@ def write_minimal_clinical_information(outputfile, mapfile, data_type, centre, s
             positions = map_columns_to_header(column_names, T)
             # update header with the column names and record the column names positions in the new header
             T, positions = update_clinical_sample_header(column_names, positions, T, data_types)
-            # reformat header
-            for i in range(len(T)):
-                T[i] = '\t'.join(T[i])
             # initialize all columns with empty values beside patient and sample Ids
             data = {}
             for i in S:
@@ -447,6 +444,9 @@ def write_minimal_clinical_information(outputfile, mapfile, data_type, centre, s
             U = []
             for i in data:
                 U.append('\t'.join(data[i]))
+            # reformat header
+            for i in range(len(T)):
+                T[i] = '\t'.join(T[i])
         else:
             # make a list of unique records
             U = []
@@ -462,7 +462,6 @@ def write_minimal_clinical_information(outputfile, mapfile, data_type, centre, s
     else:
         for i in U:
             T.append('\t'.join(i + [''] * (len(T[0].split('\t')) - 2)))
-    
     newfile = open(outputfile, 'w')
     newfile.write('\n'.join(T))
     newfile.close()
