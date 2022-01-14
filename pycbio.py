@@ -1619,9 +1619,10 @@ def make_import_folder(args):
     write_cases(os.path.join(casedir, 'cases_fusion.txt'), study, mapfile, 'fusion')
     print('wrote cases')
 
-    # write minimal clinical information
+    # write patient and sample clinical information
     write_minimal_clinical_information(os.path.join(cbiodir, 'data_clinical_patients.txt'), mapfile, 'patient', center)
-    write_minimal_clinical_information(os.path.join(cbiodir, 'data_clinical_samples.txt'), mapfile, 'sample', center)
+    # get the user defined sample clinical information
+    write_minimal_clinical_information(os.path.join(cbiodir, 'data_clinical_samples.txt'), mapfile, 'sample', center, sample_info = args.clinical)
     print('wrote clinical information')
     
     # write clinical input file for oncokb-annotator
@@ -1826,7 +1827,8 @@ if __name__ == '__main__':
     
     # generate import folder
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
-    g_parser.add_argument('-c', '--Config', dest='config', help='Path to the config file', required = True)
+    g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
+    g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
     g_parser.set_defaults(func=make_import_folder)
     
     # import folder to gsi cbioportal instance
