@@ -281,7 +281,7 @@ def map_column_data_type(sample_info):
         for j in sample_info[i]:
             try:
                 float(sample_info[i][j])
-                data_type[j] = 'FLOAT'
+                data_type[j] = 'NUMBER'
             except:
                 data_type[j] = 'STRING'
     return data_type
