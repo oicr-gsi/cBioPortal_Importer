@@ -665,6 +665,7 @@ def write_metadata(outputfile, study, data_type, genome):
         filename = 'data_CNA.txt'
         alteration = 'COPY_NUMBER_ALTERATION'
         data = data_type.upper()
+        show_profile = 'true'
     elif data_type == 'log2-value':
         stable_id = 'log2CNA'
         description = 'profile_description: Log2 copy-number values'
@@ -672,6 +673,7 @@ def write_metadata(outputfile, study, data_type, genome):
         filename = 'data_log2CNA.txt'
         alteration = 'COPY_NUMBER_ALTERATION'
         data = data_type.upper()
+        show_profile = 'false'
     elif data_type == 'seg':
         filename = 'data_segments.txt'
         description = 'description: Segment data'
@@ -684,6 +686,7 @@ def write_metadata(outputfile, study, data_type, genome):
         filename = 'data_fusions.txt'
         description = 'profile_description: Fusion data'
         data = data_type.upper()
+        show_profile = 'false'
     elif data_type == 'expression':
         alteration = 'MRNA_EXPRESSION'
         data = 'CONTINUOUS'
@@ -691,6 +694,7 @@ def write_metadata(outputfile, study, data_type, genome):
         filename = 'data_expression.txt'
         name = 'mRNA expression RNA-Seq'
         description = 'profile_description: Expression levels RNA-Seq'
+        show_profile = 'true'
     elif data_type == 'zscore':
         alteration = 'MRNA_EXPRESSION'
         data = 'Z-SCORE'
@@ -698,6 +702,7 @@ def write_metadata(outputfile, study, data_type, genome):
         filename = 'data_expression_zscores.txt'
         description = 'profile_description: Expression levels z-scores'
         name = 'mRNA expression z-scores'
+        show_profile = 'true'
     elif data_type == 'maf':
         data = data_type.upper()
         alteration = 'MUTATION_EXTENDED'
@@ -705,6 +710,7 @@ def write_metadata(outputfile, study, data_type, genome):
         name = 'profile_name: Mutations'
         stable_id = 'mutations'
         filename = 'data_mutations_extended.txt'
+        show_profile = 'true'
 
     # collect file text commun to all metadata data types
     L = ['cancer_study_identifier: {0}'.format(study),
@@ -716,7 +722,7 @@ def write_metadata(outputfile, study, data_type, genome):
     # add specific data type text
     if data_type in ['discrete', 'log2-value', 'fusion', 'expression', 'zscore', 'maf']:
         L.extend(['stable_id: {0}'.format(stable_id),
-                  'show_profile_in_analysis_tab: true',
+                  'show_profile_in_analysis_tab: {0}'.format(show_profile),
                   'profile_name: {0}'.format(name)])
     elif data_type == 'seg':
         L.append('reference_genome_id: {0}'.format(genome))
