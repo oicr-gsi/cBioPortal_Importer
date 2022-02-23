@@ -1627,7 +1627,7 @@ def make_import_folder(args):
     # write patient and sample clinical information
     write_minimal_clinical_information(os.path.join(cbiodir, 'data_clinical_patients.txt'), mapfile, 'patient', center)
     # get the user defined sample clinical information
-    clinical_info = get_clinical_data(args.clinical)
+    clinical_info = get_clinical_data(args.clinical) if args.clinical else None
     write_minimal_clinical_information(os.path.join(cbiodir, 'data_clinical_samples.txt'), mapfile, 'sample', center, sample_info = clinical_info)
     print('wrote clinical information')
     
