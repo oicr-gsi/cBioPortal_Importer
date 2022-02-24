@@ -1053,25 +1053,29 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                 line = line.split('\t')
                 # filter based on depth
                 if int(line[header.index('t_depth')]) >= depth_filter:
-                    # filter based on ratio t_alt_count / t_depth
-                    if int(line[header.index('t_alt_count')]) / int(line[header.index('t_depth')]) >= alt_freq_filter:
-                        # filter based on Matched_Norm_Sample_Barcode
-                        if line[header.index('Matched_Norm_Sample_Barcode')] == "unmatched":
-                            # check gnomAD_AF. field may be blank, check if value recorded
-                            try:
-                                float(line[header.index('gnomAD_AF')])
-                            except:
-                                # no value for gnomAD_AF, do not keep mutation
-                                newline = ''
+                    # check that mutation has supporting read counts
+                    if line[header.index('t_alt_count')] and line[header.index('t_depth')]:
+                        # filter based on ratio t_alt_count / t_depth
+                        if int(line[header.index('t_alt_count')]) / int(line[header.index('t_depth')]) >= alt_freq_filter:
+                            # filter based on Matched_Norm_Sample_Barcode
+                            if line[header.index('Matched_Norm_Sample_Barcode')] == "unmatched":
+                                # check gnomAD_AF. field may be blank, check if value recorded
+                                try:
+                                    float(line[header.index('gnomAD_AF')])
+                                except:
+                                    # no value for gnomAD_AF, do not keep mutation
+                                    newline = ''
+                                else:
+                                    # compare gnomAD_AF to folder
+                                    if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
+                                        newline = line
+                                        kept += 1
                             else:
-                                # compare gnomAD_AF to folder
-                                if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
-                                    newline = line
-                                    kept += 1
-                        else:
-                            newline = line
-                            kept += 1
-                            
+                                newline = line
+                                kept += 1
+                    else:
+                        # discard mutations without supporting read count
+                        newline = ''
             if newline:
                 newfile.write('\t'.join(newline) + '\n')
     newfile.close()                
