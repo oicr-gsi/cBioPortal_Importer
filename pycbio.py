@@ -1027,7 +1027,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     infile = open(maffile)
     
     # get file header
-    header = infile.readline().rstrip().split('\t')
+    header = infile.readline().rstrip('\n').split('\t')
     
     # write header to outputfile
     newfile.write('\t'.join(header) + '\n')
@@ -1042,7 +1042,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     for line in infile:
         # count total mutations
         total += 1
-        line = line.rstrip()
+        line = line.rstrip('\n')
         newline = ''
         if line != '':
             # check that mutation is valid and that excuded fields are not recorded
