@@ -1001,9 +1001,9 @@ def concatenate_maf_files(mafdir, outputfile):
     newfile.close()
 
                 
-def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter):
+def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants):
     '''
-    (str, str, int, float, float) -> (int, int)
+    (str, str, int, float, float, bool) -> (int, int)
     
     Writes records from maffile to outputfile if mutations pass depth, alt_freq and gnomAd_AF filters
     Returns the total number of mutations before and after filtering
@@ -1017,6 +1017,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     - alt_freq_filter (float): Minimum alternative allele frequency (t_alt_count / t_depth)
     - gnomAD_AF_filter (float): Maximum allele frequency is the Genome Aggregation Database
                                 if Matched_Norm_Sample_Barcode is unmatched
+    - keep_variants(bool): Keep variants with missing gnomAD_AF values when Matched_Norm_Sample_Barcode is unmatched if True 
     '''
     
     # count the number of mutations before and after filtering
@@ -1063,8 +1064,14 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                                 try:
                                     float(line[header.index('gnomAD_AF')])
                                 except:
-                                    # no value for gnomAD_AF, do not keep mutation
-                                    newline = ''
+                                    # check if variants are kept or not
+                                    if keep_variants:
+                                        # variants are kept anyway when gnomAD_AF is not defined
+                                        newline = line
+                                        kept += 1
+                                    else:
+                                        # no value for gnomAD_AF, do not keep mutation
+                                        newline = ''
                                 else:
                                     # compare gnomAD_AF to folder
                                     if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
@@ -1685,7 +1692,7 @@ def make_import_folder(args):
     maffile = os.path.join(mafdir, 'input.maf.txt')
     # filter mutations and indels if option is activated
     if filter_variants:
-        total, kept = filter_mutations(os.path.join(mafdir, 'all_mutations.maf.txt'), os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter)
+        total, kept = filter_mutations(os.path.join(mafdir, 'all_mutations.maf.txt'), os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, args.keep_variants)
         print("before mutations filtering: ", total)
         print("after mutations filtering: ", kept)
         print('filtered variants')
@@ -1839,6 +1846,7 @@ if __name__ == '__main__':
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
     g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
+    g_parser.add_argument('--keep_variants', dest='keep_variants', action='store_true', help='Keep variants with missing gnomAD_AF when Matched_Norm_Sample_Barcode is unmatched with this flag. By default, these variants are discarded')
     g_parser.set_defaults(func=make_import_folder)
     
     # import folder to gsi cbioportal instance
