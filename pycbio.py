@@ -1846,7 +1846,7 @@ def import_cbioportal_project(args):
     print(import_message + '\n' + len(import_message) * '=' + '\n\n')
     
     # Import study with import_study.sh. Precondition. cbioportal is installed with docker image
-    cmd = "ssh {0} -t ubuntu@cbio ' /home/ubuntu/import_study.sh {1}'".format(key, new_dir)
+    cmd = "ssh {0} -t ubuntu@cbio ' /home/ubuntu/import_study_modified.sh {1} {2}'".format(key, new_dir, args.genome)
     output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').rstrip()
     
     print(output + '\n\n\n')
@@ -1871,6 +1871,7 @@ if __name__ == '__main__':
     i_parser.add_argument('-f', '--folder', dest='folder', help='Path to cbioportal import folder', required = True)
     i_parser.add_argument("-k", "--key", dest='key', default = '', help="Path to the cBioPortal Key")
     i_parser.add_argument("-u", "--user", dest= 'user', default='ubuntu', help="The linux distribution. Default is ubuntu")
+    i_parser.add_argument("-g", "--genome", dest= 'genome', choices=['hg19', 'hg38'], help = 'Reference genome, hg19 or hg38', required=True)
     i_parser.set_defaults(func=import_cbioportal_project)
  
     # get arguments from the command line
