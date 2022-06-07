@@ -135,6 +135,7 @@ def get_genome_version(mapfile):
     (str) -> str
     
     Returns the genome version (hg19 or hg38) using the ref of the first MAF file listed in the map file
+    or an empty string if no MAF files are present in the map file
     
     Parameters
     ----------
@@ -142,23 +143,26 @@ def get_genome_version(mapfile):
     '''
     
     # get the 1st maf listed in mapfile
-    maf = extract_files_from_map(mapfile, 'maf')[0]
-    
-    # grab genome column in maf. skipping header and commented lines
-    infile = gzip.open(maf, 'rt')
-    ncbiGenome = []
-    for line in infile:
-        if not line.startswith('#') and 'Hugo_Symbol' not in line:
-            line = line.rstrip().split('\t')
-            ncbiGenome.append(line[3])              
-    infile.close()
-    # reduce list to genome value
-    ncbiGenome = list(set(ncbiGenome))[0]
-    # convert genome identifier
-    if ncbiGenome == "GRCh38":
-        genomev="hg38"
-    elif ncbiGenome == "GRCh37":
-        genomev="hg19"
+    mafs = extract_files_from_map(mapfile, 'maf')
+    if mafs:
+        maf = mafs[0]
+        # grab genome column in maf. skipping header and commented lines
+        infile = gzip.open(maf, 'rt')
+        ncbiGenome = []
+        for line in infile:
+            if not line.startswith('#') and 'Hugo_Symbol' not in line:
+                line = line.rstrip().split('\t')
+                ncbiGenome.append(line[3])              
+        infile.close()
+        # reduce list to genome value
+        ncbiGenome = list(set(ncbiGenome))[0]
+        # convert genome identifier
+        if ncbiGenome == "GRCh38":
+            genomev="hg38"
+        elif ncbiGenome == "GRCh37":
+            genomev="hg19"
+    else:
+        genomev = ''
     return genomev        
 
 
@@ -1412,10 +1416,10 @@ def extract_options_from_config(config):
     - config (configparser.ConfigParser): Config file parsed with configparser
     '''    
     
-    options = ['mapfile', 'outdir', 'study', 'center', 'cancer_code']
+    options = ['mapfile', 'outdir', 'study', 'center', 'cancer_code', 'genome']
     L = [config['Options'][i] for i in options]
-    mapfile, outdir, study, center, cancer_code = L
-    return mapfile, outdir, study, center, cancer_code
+    mapfile, outdir, study, center, cancer_code, genome = L
+    return mapfile, outdir, study, center, cancer_code, genome
 
 
 def extract_parameters_from_config(config):
@@ -1585,17 +1589,25 @@ def make_import_folder(args):
     
     # extract variables from config
     ProcMAF, ProcCNA, ProcRNA, ProcFusion, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
-    mapfile, outdir, study, center, cancer_code = extract_options_from_config(config)
+    mapfile, outdir, study, center, cancer_code, genome = extract_options_from_config(config)
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
     print('extracted variables from config')
     
-    # check that at least 1 maf file exists in map file
-    mafs = extract_files_from_map(mapfile, 'maf')
-    if len(mafs) == 0:
-        raise ValueError('ERROR. At least 1 MAF file is required')
-    print('checked for MAF files') 
-
+    
+    # check genome version in the first mutation file encountered if provided
+    genomev = get_genome_version(mapfile)
+    if genomev:
+        if genome != genomev:
+            raise ValueError('ERROR. Reference in MAF file does not match reference in config')
+        else:
+            print('hecked reference genome: {0}'.format(genome))
+    # get genome specific variables
+    if genome == 'hg38':
+        enscon, genebed = enscon_hg38, genebed_hg38
+    elif genome == 'hg19':
+        enscon, genebed = enscon_hg19, genebed_hg19
+    
     # check that cancer type is correctly defined
     check_cancer_type(cancer_code)
     print('checked cancer code')
@@ -1608,17 +1620,6 @@ def make_import_folder(args):
     create_input_directories(outdir, mapfile)
     print('created input directories')
     
-    # check for genome version in the first mutation file encountered
-    genome = get_genome_version(mapfile)
-    print('got reference genome from maf file: {0}'.format(genome))
-    
-    # get genome specific variables
-    if genome == 'hg38':
-        enscon = enscon_hg38
-        genebed = genebed_hg38
-    elif genome == 'hg19':
-        enscon = enscon_hg19
-        genebed = genebed_hg19
     
     # write meta study and clinical files
     write_meta_study(os.path.join(cbiodir, 'meta_study.txt') , study, genome, cancer_code)
@@ -1651,89 +1652,105 @@ def make_import_folder(args):
         link_files(outdir, mapfile, i)
     print('linked files to input directories')
     
+        
     # concatenate input files
     # concatenate mafs    
+    mafs = extract_files_from_map(mapfile, 'maf')
     mafdir = os.path.join(outdir, 'mafdir')
-    assert os.path.isdir(mafdir)
-    # concatenate all maf files into a plain text file
-    concatenate_maf_files(mafdir, os.path.join(mafdir, 'all_mutations.maf.txt'))
-    print('concatenated maf files')
-    
+    if mafs:
+        assert os.path.isdir(mafdir)
+        mutation_file = os.path.join(mafdir, 'all_mutations.maf.txt')
+        # concatenate all maf files into a plain text file
+        concatenate_maf_files(mafdir, mutation_file)
+        print('concatenated maf files')
+    else:
+        mutation_file = ''
+        
     # check if seg dir and seg files exist
+    segs = extract_files_from_map(mapfile, 'seg')
     segdir = os.path.join(outdir, 'segdir')
-    if os.path.isdir(segdir):
+    if segs:
+        assert os.path.isdir(segdir)
         segfile = os.path.join(segdir, 'input.seg.txt')
         # concatenate seg files if they exist
         concatenate_seg_files(segdir, segfile)
+        print('concatenated seg files')
     else:
         segfile = ''
 
     # check if fusion dir and fusion files exist
+    fusions = extract_files_from_map(mapfile, 'fus')
     fusdir = os.path.join(outdir, 'fusdir')
-    if os.path.isdir(fusdir):
+    if fusions:
+        assert os.path.isdir(fusdir)
         fusfile = os.path.join(fusdir, 'input.fus.txt')
         # concatenate fusion files, if they exist
         concatenate_fusion_files(fusdir, fusfile)
+        print('concatenated fusion files')
     else:
         fusfile = ''
     
     # extract and concatenate fpkm from gep files
+    geps = extract_files_from_map(mapfile, 'gep')
     gepdir = os.path.join(outdir, 'gepdir')
-    if os.path.isdir(gepdir):
+    if geps:
+        assert os.path.isdir(gepdir)
         gepfile = os.path.join(gepdir, 'input.fpkm.txt')
         # write fpkm to file
         concatenate_fpkm_from_gep_files(gepdir, gepfile)
+        print('concatenated fpkm from gep files')
     else:
         gepfile = ''
     
     
     # filter maf files and write metadata
     # define maffile, output of MafAnnotator
-    maffile = os.path.join(mafdir, 'input.maf.txt')
-    # filter mutations and indels if option is activated
-    if filter_variants:
-        total, kept = filter_mutations(os.path.join(mafdir, 'all_mutations.maf.txt'), os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, args.keep_variants)
-        print("before mutations filtering: ", total)
-        print("after mutations filtering: ", kept)
-        print('filtered variants')
-    # filter indels if option is activated
-    if filter_indels:
-        # check if variants are filtered
+    if mutation_file:
+        maffile = os.path.join(mafdir, 'input.maf.txt')
+        # filter mutations and indels if option is activated
         if filter_variants:
-            maf_to_filter = os.path.join(mafdir, 'filtered.mutations.txt')
-            maf_filtered = os.path.join(mafdir, 'filtered.mutations.indels.txt')
+            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, args.keep_variants)
+            print("before mutations filtering: ", total)
+            print("after mutations filtering: ", kept)
+            print('filtered variants')
+        # filter indels if option is activated
+        if filter_indels:
+            # check if variants are filtered
+            if filter_variants:
+                maf_to_filter = os.path.join(mafdir, 'filtered.mutations.txt')
+                maf_filtered = os.path.join(mafdir, 'filtered.mutations.indels.txt')
+            else:
+                maf_to_filter = os.path.join(mafdir, 'all_mutations.maf.txt')
+                maf_filtered = os.path.join(mafdir, 'filtered.indels.txt')
+            # output file for MafAnnotator
+            maf_input_annotation = maf_filtered
+            total, kept = remove_indels(maf_to_filter, maf_filtered)
+            print("before indel filtering: ", total)
+            print("after indel filtering: ", kept)
+            print('filtered indels')
         else:
-            maf_to_filter = os.path.join(mafdir, 'all_mutations.maf.txt')
-            maf_filtered = os.path.join(mafdir, 'filtered.indels.txt')
-        # output file for MafAnnotator
-        maf_input_annotation = maf_filtered
-        total, kept = remove_indels(maf_to_filter, maf_filtered)
-        print("before indel filtering: ", total)
-        print("after indel filtering: ", kept)
-        print('filtered indels')
-    else:
-        if filter_variants:
-            maf_input_annotation = os.path.join(mafdir, 'filtered.mutations.txt')    
+            if filter_variants:
+                maf_input_annotation = os.path.join(mafdir, 'filtered.mutations.txt')    
+            else:
+                print('kept all variants')
+                maf_input_annotation = os.path.join(mafdir, 'all_mutations.maf.txt')
+     
+        # get oncokb token
+        oncokb_token = get_token(token)
+    
+        # annotate mafs with oncokb-annotate        
+        maf_annotation = subprocess.call('MafAnnotator -i {0} -o {1} -c {2} -b {3}'.format(maf_input_annotation, maffile, os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell=True)
+        # check exit code
+        if maf_annotation:
+            sys.exit('Error when running MafAnnotator.')
         else:
-            print('kept all variants')
-            maf_input_annotation = os.path.join(mafdir, 'all_mutations.maf.txt')
+            print('Annotated variants with MafAnnotator')
     
-    # get oncokb token
-    oncokb_token = get_token(token)
-    
-    # annotate mafs with oncokb-annotate        
-    maf_annotation = subprocess.call('MafAnnotator -i {0} -o {1} -c {2} -b {3}'.format(maf_input_annotation, maffile, os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell=True)
-    # check exit code
-    if maf_annotation:
-        sys.exit('Error when running MafAnnotator.')
-    else:
-        print('Annotated variants with MafAnnotator')
-    
-    # generate mutations data
-    process_mutations(maffile, tglpipe, ProcMAF, outdir)
-    # write metadata file
-    write_metadata(os.path.join(cbiodir, 'meta_mutations_extended.txt'), study, 'maf', genome)
-    print('wrote mutations metadata')
+        # generate mutations data
+        process_mutations(maffile, tglpipe, ProcMAF, outdir)
+        # write metadata file
+        write_metadata(os.path.join(cbiodir, 'meta_mutations_extended.txt'), study, 'maf', genome)
+        print('wrote mutations metadata')
     
     # generate CNA data and metadata files if input segmentation file exists
     if segfile:
@@ -1829,7 +1846,7 @@ def import_cbioportal_project(args):
     print(import_message + '\n' + len(import_message) * '=' + '\n\n')
     
     # Import study with import_study.sh. Precondition. cbioportal is installed with docker image
-    cmd = "ssh {0} -t ubuntu@cbio ' /home/ubuntu/import_study.sh {1}'".format(key, new_dir)
+    cmd = "ssh {0} -t ubuntu@cbio ' /home/ubuntu/import_study_modified.sh {1} {2}'".format(key, new_dir, args.genome)
     output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').rstrip()
     
     print(output + '\n\n\n')
@@ -1854,6 +1871,7 @@ if __name__ == '__main__':
     i_parser.add_argument('-f', '--folder', dest='folder', help='Path to cbioportal import folder', required = True)
     i_parser.add_argument("-k", "--key", dest='key', default = '', help="Path to the cBioPortal Key")
     i_parser.add_argument("-u", "--user", dest= 'user', default='ubuntu', help="The linux distribution. Default is ubuntu")
+    i_parser.add_argument("-g", "--genome", dest= 'genome', choices=['hg19', 'hg38'], help = 'Reference genome, hg19 or hg38', required=True)
     i_parser.set_defaults(func=import_cbioportal_project)
  
     # get arguments from the command line
