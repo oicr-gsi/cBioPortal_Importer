@@ -23,7 +23,7 @@ def extract_files_from_map(mapfile, data_type):
     '''
     (str, str) -> list
     
-    Returns a list of MAF files from the mapping file
+    Returns a list of input files from the mapping file
         
     Parameters
     ----------
@@ -1567,6 +1567,36 @@ def get_token(token_file):
     return oncokb_token
 
 
+def check_input_mafs(mapfile):
+    '''
+    (str) -> None
+    
+    Exits if the input maf files have different headers
+        
+    Parameters
+    ----------
+    - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
+    '''
+
+    # make a list of input maf files 
+    mafs = extract_files_from_map(mapfile, 'maf')
+    
+    # make a list of file headers
+    headers = []
+    if mafs:
+        for file in mafs:
+            infile = gzip.open(file, 'rt')
+            for line in infile:
+                if 'Hugo_Symbol' in line:
+                    headers.append(line.rstrip())
+                    break
+            infile.close()
+                
+    # check if multiple headers
+    if len(list(set(headers))) > 1:
+        sys.exit('Input MAF files have different headers')
+    
+
 
 def make_import_folder(args):
     '''
@@ -1595,6 +1625,9 @@ def make_import_folder(args):
     print('extracted variables from config')
     
     
+    # check that input maf files, if any, have the same format and the same header
+    check_input_mafs(mapfile)
+        
     # check genome version in the first mutation file encountered if provided
     genomev = get_genome_version(mapfile)
     if genomev:
