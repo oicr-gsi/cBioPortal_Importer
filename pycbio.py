@@ -711,7 +711,7 @@ def write_metadata(outputfile, study, data_type, genome):
         data = data_type.upper()
         alteration = 'MUTATION_EXTENDED'
         description = 'profile_description: Mutations'
-        name = 'profile_name: Mutations'
+        name = 'Mutations'
         stable_id = 'mutations'
         filename = 'data_mutations_extended.txt'
         show_profile = 'true'
