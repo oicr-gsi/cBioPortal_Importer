@@ -198,7 +198,7 @@ def write_cases(outputfile, study, mapfile, data_type):
     elif data_type == 'fusion':
         # make a list of samples for which fusion files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[5].upper() != 'NA']
-        name = 'Samples profiled for mutations'
+        name = 'Samples profiled for fusions'
         description = 'This is this case list that contains all samples that are profiled for fusion.'
         stable_id = '{0}_fusion'.format(study)
     elif data_type == 'rna':
