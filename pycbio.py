@@ -698,7 +698,7 @@ def write_metadata(outputfile, study, data_type, genome):
         filename = 'data_expression.txt'
         name = 'mRNA expression RNA-Seq'
         description = 'profile_description: Expression levels RNA-Seq'
-        show_profile = 'true'
+        show_profile = 'false'
     elif data_type == 'zscore':
         alteration = 'MRNA_EXPRESSION'
         data = 'Z-SCORE'
