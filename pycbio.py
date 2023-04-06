@@ -198,7 +198,7 @@ def write_cases(outputfile, study, mapfile, data_type):
     elif data_type == 'fusion':
         # make a list of samples for which fusion files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[5].upper() != 'NA']
-        name = 'Samples profiled for mutations'
+        name = 'Samples profiled for fusions'
         description = 'This is this case list that contains all samples that are profiled for fusion.'
         stable_id = '{0}_fusion'.format(study)
     elif data_type == 'rna':
@@ -698,7 +698,7 @@ def write_metadata(outputfile, study, data_type, genome):
         filename = 'data_expression.txt'
         name = 'mRNA expression RNA-Seq'
         description = 'profile_description: Expression levels RNA-Seq'
-        show_profile = 'true'
+        show_profile = 'false'
     elif data_type == 'zscore':
         alteration = 'MRNA_EXPRESSION'
         data = 'Z-SCORE'
@@ -711,7 +711,7 @@ def write_metadata(outputfile, study, data_type, genome):
         data = data_type.upper()
         alteration = 'MUTATION_EXTENDED'
         description = 'profile_description: Mutations'
-        name = 'profile_name: Mutations'
+        name = 'Mutations'
         stable_id = 'mutations'
         filename = 'data_mutations_extended.txt'
         show_profile = 'true'
