@@ -76,7 +76,7 @@ def create_input_directories(outdir, mapfile):
             os.makedirs(filedir, exist_ok=True)
     
 
-def write_meta_study(outputfile, study, genome, cancerType):
+def write_meta_study(outputfile, study, project_name, description, genome, cancerType):
     '''
     (str, str, str, str) -> None
     
@@ -86,15 +86,17 @@ def write_meta_study(outputfile, study, genome, cancerType):
     ----------
     - outputfile (str): Path to the outputfile 
     - study (str): Name of the study as it appears in cBioPortal
+    - project_name: Following the format ACRONYM: Top-level-OncoTree, Concept (PI, Centre)
+    - description: Short description of the study
     - genome (str): Reference genome (hg19 or hg38)
     - cancerType (str): Cancer type as defined in http://oncotree.mskcc.org
     '''
 
     newfile = open(outputfile, 'w')
     L = ['cancer_study_identifier: {0}'.format(study),
-         'description: {0}'.format(study),
+         'description: {0}'.format(description),
          'groups: ',
-         'name: {0}'.format(study),
+         'name: {0}'.format(project_name),
          'reference_genome: {0}'.format(genome),
          'short_name: {0}'.format(study),
          'add_global_case_list: true',
@@ -1416,10 +1418,10 @@ def extract_options_from_config(config):
     - config (configparser.ConfigParser): Config file parsed with configparser
     '''    
     
-    options = ['mapfile', 'outdir', 'study', 'center', 'cancer_code', 'genome']
+    options = ['mapfile', 'outdir', 'project_name', 'description', 'study', 'center', 'cancer_code', 'genome']
     L = [config['Options'][i] for i in options]
-    mapfile, outdir, study, center, cancer_code, genome = L
-    return mapfile, outdir, study, center, cancer_code, genome
+    mapfile, outdir, project_name, description, study, center, cancer_code, genome = L
+    return mapfile, outdir, project_name, description, study, center, cancer_code, genome
 
 
 def extract_parameters_from_config(config):
@@ -1619,7 +1621,7 @@ def make_import_folder(args):
     
     # extract variables from config
     ProcMAF, ProcCNA, ProcRNA, ProcFusion, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
-    mapfile, outdir, study, center, cancer_code, genome = extract_options_from_config(config)
+    mapfile, outdir, project_name, description, study, center, cancer_code, genome = extract_options_from_config(config)
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
     print('extracted variables from config')
@@ -1655,7 +1657,7 @@ def make_import_folder(args):
     
     
     # write meta study and clinical files
-    write_meta_study(os.path.join(cbiodir, 'meta_study.txt') , study, genome, cancer_code)
+    write_meta_study(os.path.join(cbiodir, 'meta_study.txt') , study, project_name, description, genome, cancer_code)
     write_meta_clinical(cbiodir, study, 'sample')
     write_meta_clinical(cbiodir, study, 'patient')
     print('wrote study and clinical metadata')    
