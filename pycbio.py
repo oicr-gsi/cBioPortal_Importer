@@ -169,7 +169,7 @@ def get_genome_version(mapfile):
 
 
 
-def write_cases(outputfile, study, mapfile, data_type):
+def write_cases(outputfile, project_name, mapfile, data_type):
     '''
     (str, str, str, str) -> None
     
@@ -178,7 +178,7 @@ def write_cases(outputfile, study, mapfile, data_type):
     Parameters
     ----------
     - outputfile (str): Path to the outputfile
-    - study (str): Name of the study as it appears in cBioPortal
+    - project_name (str): Field project_name in configuration file
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - data_type (str): The type of data considered.
                        Values accepted are: seq, rna, cna, cna_seq, cna_seq_rna
@@ -196,42 +196,42 @@ def write_cases(outputfile, study, mapfile, data_type):
         samples = [i.split(',')[1] for i in content if i.split(',')[2].upper() != 'NA']
         name = 'Samples profiled for mutations'
         description = 'This is this case list that contains all samples that are profiled for mutations.'
-        stable_id = '{0}_sequenced'.format(study)
+        stable_id = '{0}_sequenced'.format(project_name)
     elif data_type == 'fusion':
         # make a list of samples for which fusion files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[5].upper() != 'NA']
         name = 'Samples profiled for fusions'
         description = 'This is this case list that contains all samples that are profiled for fusion.'
-        stable_id = '{0}_fusion'.format(study)
+        stable_id = '{0}_fusion'.format(project_name)
     elif data_type == 'rna':
         # make a list of samples for which rsem files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[4].upper() != 'NA']
         name = 'Samples profiled for rnaseq'
         description = 'This is this case list that contains all samples that are profiled for rnaseq.'
-        stable_id = '{0}_rna_seq_mrna'.format(study)    
+        stable_id = '{0}_rna_seq_mrna'.format(project_name)    
     elif data_type == 'cna':
         # make a list of samples for which cna files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[3].upper() != 'NA']
         name = 'Samples profiled for cnas'
         description = 'This is this case list that contains all samples that are profiled for cnas.'
-        stable_id = '{0}_cna'.format(study)
+        stable_id = '{0}_cna'.format(project_name)
     elif data_type == 'cna_seq':
         # make a list of samples for which cna and maf files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[3].upper() != 'NA' and i.split(',')[2].upper() != 'NA' ]
         name = 'Samples profiled for cnas and sequencing'
         description = 'This is this case list that contains all samples that are profiled for mutations and cnas.'
-        stable_id = '{0}_cnaseq'.format(study)
+        stable_id = '{0}_cnaseq'.format(project_name)
     elif data_type == 'cna_seq_rna':
         # make a list of samples for which cna and maf and rna files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[2].upper() != 'NA' and i.split(',')[3].upper() != 'NA' and i.split(',')[4].upper() != 'NA']
         name = 'Samples profiled for all of mutation, cnas, and rnaseq'
         description = 'This is this case list that contains all samples that are profiled for mutations, cnas, and rnaseq.'
-        stable_id = '{0}_3way_complete'.format(study)
+        stable_id = '{0}_3way_complete'.format(project_name)
     
     # write outputfile if samples exist
     if samples:
         newfile = open(outputfile, 'w')
-        L = ['cancer_study_identifier: {0}'.format(study),
+        L = ['cancer_study_identifier: {0}'.format(project_name),
              'stable_id: {0}'.format(stable_id),
              'case_list_name: {0}'.format(name),
              'case_list_description: {0}'.format(description),
@@ -1663,12 +1663,12 @@ def make_import_folder(args):
     print('wrote study and clinical metadata')    
     
     # write cases
-    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), study, mapfile, 'seq')
-    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), study, mapfile, 'rna')
-    write_cases(os.path.join(casedir, 'cases_cna.txt'), study, mapfile, 'cna')
-    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), study, mapfile, 'cna_seq')
-    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), study, mapfile, 'cna_seq_rna')
-    write_cases(os.path.join(casedir, 'cases_fusion.txt'), study, mapfile, 'fusion')
+    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), project_name, mapfile, 'seq')
+    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), project_name, mapfile, 'rna')
+    write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, mapfile, 'cna')
+    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, mapfile, 'cna_seq')
+    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, mapfile, 'cna_seq_rna')
+    write_cases(os.path.join(casedir, 'cases_fusion.txt'), project_name, mapfile, 'fusion')
     print('wrote cases')
 
     # write patient and sample clinical information
