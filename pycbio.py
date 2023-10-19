@@ -85,27 +85,27 @@ def write_meta_study(outputfile, study, project_name, description, genome, cance
     Parameters
     ----------
     - outputfile (str): Path to the outputfile 
-    - study (str): Name of the study as it appears in cBioPortal
-    - project_name: Following the format ACRONYM: Top-level-OncoTree, Concept (PI, Centre)
+    - study (str): Long study name, following the format: ACRONYM: Top-level-OncoTree, Concept (PI, Centre)
+    - project_name: Short project name, field project_name in the configuration file 
     - description: Short description of the study
     - genome (str): Reference genome (hg19 or hg38)
     - cancerType (str): Cancer type as defined in http://oncotree.mskcc.org
     '''
 
     newfile = open(outputfile, 'w')
-    L = ['cancer_study_identifier: {0}'.format(study),
+    L = ['cancer_study_identifier: {0}'.format(project_name),
          'description: {0}'.format(description),
          'groups: ',
-         'name: {0}'.format(project_name),
+         'name: {0}'.format(study),
          'reference_genome: {0}'.format(genome),
-         'short_name: {0}'.format(study),
+         'short_name: {0}'.format(project_name),
          'add_global_case_list: true',
          'type_of_cancer: {0}'.format(cancerType)]
     newfile.write('\n'.join(L))
     newfile.close()     
     
 
-def write_meta_clinical(cbio_import_dir, study, data_type):
+def write_meta_clinical(cbio_import_dir, project_name, data_type):
     '''
     (str, str, str) -> None
     
@@ -114,7 +114,7 @@ def write_meta_clinical(cbio_import_dir, study, data_type):
     Parameters
     ----------
     - cbio_import_dir (str): Path to the cbioportal_import_data directory 
-    - study (str): Name of the study as it appears in cBioPortal
+    - project_name (str): project_name in the config file
     - data_type(str): Sample or patient
     '''
     
@@ -124,7 +124,7 @@ def write_meta_clinical(cbio_import_dir, study, data_type):
     filename = 'meta_clinical_{0}s.txt'.format(data_type.lower())
     outputfile = os.path.join(cbio_import_dir, filename)
     newfile = open(outputfile, 'w')
-    L = ['cancer_study_identifier: {0}'.format(study),
+    L = ['cancer_study_identifier: {0}'.format(project_name),
          'data_filename: {0}'.format(filename.replace('meta', 'data')),
          'datatype: {0}_ATTRIBUTES'.format(data_type.upper()),
          'genetic_alteration_type: CLINICAL']
@@ -649,7 +649,7 @@ def concatenate_seg_files(segdir, outputfile):
     newfile.close()        
 
 
-def write_metadata(outputfile, study, data_type, genome):
+def write_metadata(outputfile, project_name, data_type, genome):
     '''
     (str, str, str, str) -> None
 
@@ -658,7 +658,7 @@ def write_metadata(outputfile, study, data_type, genome):
     Parameters
     ----------
     - outputfile (str): Path to the output file
-    - study (str): Name of the study as it appears in cBioPortal
+    - project_name (str): Name of project: field project_name in configuration file
     - data_type (str): Type of CNA metadata.
                        Accepted valued: discrete, log2-value, seg, expression, fusion, zscore, maf
     - genome (str): Reference genome (hg19 or hg38)
@@ -719,7 +719,7 @@ def write_metadata(outputfile, study, data_type, genome):
         show_profile = 'true'
 
     # collect file text commun to all metadata data types
-    L = ['cancer_study_identifier: {0}'.format(study),
+    L = ['cancer_study_identifier: {0}'.format(project_name),
          'data_filename: {0}'.format(filename),
          'datatype: {0}'.format(data),
          description,
@@ -1658,8 +1658,8 @@ def make_import_folder(args):
     
     # write meta study and clinical files
     write_meta_study(os.path.join(cbiodir, 'meta_study.txt') , study, project_name, description, genome, cancer_code)
-    write_meta_clinical(cbiodir, study, 'sample')
-    write_meta_clinical(cbiodir, study, 'patient')
+    write_meta_clinical(cbiodir, project_name, 'sample')
+    write_meta_clinical(cbiodir, project_name, 'patient')
     print('wrote study and clinical metadata')    
     
     # write cases
@@ -1784,16 +1784,16 @@ def make_import_folder(args):
         # generate mutations data
         process_mutations(maffile, tglpipe, ProcMAF, outdir)
         # write metadata file
-        write_metadata(os.path.join(cbiodir, 'meta_mutations_extended.txt'), study, 'maf', genome)
+        write_metadata(os.path.join(cbiodir, 'meta_mutations_extended.txt'), project_name, 'maf', genome)
         print('wrote mutations metadata')
     
     # generate CNA data and metadata files if input segmentation file exists
     if segfile:
         # generate metadata files
         # write cna metadata
-        write_metadata(os.path.join(cbiodir, 'meta_CNA.txt'), study, 'discrete', genome)    
-        write_metadata(os.path.join(cbiodir, 'meta_log2CNA.txt'), study, 'log2-value', genome)    
-        write_metadata(os.path.join(cbiodir, 'meta_segments.txt'), study, 'seg', genome) 
+        write_metadata(os.path.join(cbiodir, 'meta_CNA.txt'), project_name, 'discrete', genome)    
+        write_metadata(os.path.join(cbiodir, 'meta_log2CNA.txt'), project_name, 'log2-value', genome)    
+        write_metadata(os.path.join(cbiodir, 'meta_segments.txt'), project_name, 'seg', genome) 
         print('wrote CNA metadata files')
         if genelist:
             print('Restricting CNAs to the list of genes provided in {0}'.format(genelist))
@@ -1803,8 +1803,8 @@ def make_import_folder(args):
     # generate expression data and metadata file if input file exists
     if gepfile:
         # write metadata files
-        write_metadata(os.path.join(cbiodir, 'meta_expression.txt'), study, 'expression', genome)
-        write_metadata(os.path.join(cbiodir, 'meta_expression_zscores.txt'), study, 'zscore', genome)
+        write_metadata(os.path.join(cbiodir, 'meta_expression.txt'), project_name, 'expression', genome)
+        write_metadata(os.path.join(cbiodir, 'meta_expression_zscores.txt'), project_name, 'zscore', genome)
         print('wrote expression metadata files')
         # write all samples with rna data to file 
         list_gep_samples(gepdir, os.path.join(outdir, 'gep_study.list'))
