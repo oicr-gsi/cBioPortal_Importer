@@ -181,8 +181,7 @@ def write_cases(outputfile, project_name, mapfile, data_type):
     - project_name (str): Field project_name in configuration file
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - data_type (str): The type of data considered.
-                       Values accepted are: seq, rna, cna, cna_seq, cna_seq_rna
-    
+                       Values accepted are: seq, rna, cna, cna_seq, cna_seq_rna, sv
     '''
     
     #read mapfile
@@ -197,12 +196,12 @@ def write_cases(outputfile, project_name, mapfile, data_type):
         name = 'Samples profiled for mutations'
         description = 'This is this case list that contains all samples that are profiled for mutations.'
         stable_id = '{0}_sequenced'.format(project_name)
-    elif data_type == 'fusion':
-        # make a list of samples for which fusion files are available
+    elif data_type == 'sv':
+        # make a list of samples for which SV files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[5].upper() != 'NA']
-        name = 'Samples profiled for fusions'
-        description = 'This is this case list that contains all samples that are profiled for fusion.'
-        stable_id = '{0}_fusion'.format(project_name)
+        name = 'Samples profiled for structural variants'
+        description = 'This is this case list that contains all samples that are profiled for structural variants.'
+        stable_id = '{0}_sv'.format(project_name)
     elif data_type == 'rna':
         # make a list of samples for which rsem files are available
         samples = [i.split(',')[1] for i in content if i.split(',')[4].upper() != 'NA']
@@ -660,7 +659,7 @@ def write_metadata(outputfile, project_name, data_type, genome):
     - outputfile (str): Path to the output file
     - project_name (str): Name of project: field project_name in configuration file
     - data_type (str): Type of CNA metadata.
-                       Accepted valued: discrete, log2-value, seg, expression, fusion, zscore, maf
+                       Accepted valued: discrete, log2-value, seg, expression, sv, zscore, maf
     - genome (str): Reference genome (hg19 or hg38)
     '''
     
@@ -685,14 +684,14 @@ def write_metadata(outputfile, project_name, data_type, genome):
         description = 'description: Segment data'
         alteration = 'COPY_NUMBER_ALTERATION'
         data = data_type.upper()
-    elif data_type == 'fusion':
-        alteration = 'FUSION'
-        stable_id = 'fusion' 
-        name = 'Fusions'
-        filename = 'data_fusions.txt'
-        description = 'profile_description: Fusion data'
-        data = data_type.upper()
-        show_profile = 'false'
+    elif data_type == 'sv':
+        alteration = 'STRUCTURAL_VARIANT'
+        stable_id = 'structural_variants' 
+        name = 'Structural Variants'
+        filename = 'data_sv.txt'
+        description = 'profile_description: Structural variant data'
+        data = 'SV'
+        show_profile = 'true'
     elif data_type == 'expression':
         alteration = 'MRNA_EXPRESSION'
         data = 'CONTINUOUS'
@@ -1220,6 +1219,141 @@ def process_fusion(fusfile, entcon, min_fusion_reads, ProcFusion, outdir):
         raise FileNotFoundError('Cannot find R script path {}'.format(ProcFusion))
 
 
+
+def parse_fusion(fusion_file):
+    '''
+    (str) -> dict
+    
+    Returns a dictionary with SV information
+    
+    Parameters
+    ----------
+    - fusion_file (str): Path to the file with fusion information
+    '''
+    
+    D = {}
+    
+    infile = open(fusion_file)
+    header = infile.readline().rstrip().split('\t')
+    content = infile.read().rstrip()
+    infile.close()
+    
+    if content:
+        content = content.split('\n')
+        for i in content:
+            i = i.rstrip().split('\t')
+            hugo = i[0]
+            entrez = i[1]
+            center = i[2]
+            sample = i[3]
+            fusion = i[4]
+            dna = i[5]
+            rna = i[6]
+            method = i[7]
+            frame = i[8]
+            status = i[9]
+        
+            d = {'entrez': entrez,
+                 'center': center,
+                 'fusion': fusion,
+                 'dna': dna,
+                 'rna': rna,
+                 'method': method,
+                 'frame': frame,
+                 'status': status}
+        
+            if hugo not in D:
+                D[hugo] = {}
+            assert sample not in D[hugo]
+            D[hugo][sample] = d
+       
+    return D
+    
+   
+    
+def list_fusions(fusion_file):
+    '''
+    (str) -> dict
+    
+    Returns a dictionary with fusion events for each sample
+       
+    Parameters
+    ----------
+    - fusion_file (str): Path to the file with fusion information
+    '''    
+
+    fusions = {}
+    
+    infile = open(fusion_file)
+    header = infile.readline().rstrip().split('\t')
+    content = infile.read().rstrip()
+    infile.close()
+        
+    if content:
+        content = content.split('\n')
+        for i in content:
+            i = i.split('\t')
+            sample = i[3]
+            fusion = i[4]
+        
+            if sample not in fusions:
+                fusions[sample] = set()
+            fusions[sample].add(fusion)
+    
+    return fusions
+    
+
+def convert_fusion_to_sv(fusion_file, sv_file):
+    '''
+    (str, str) -> str
+    
+    Convert the fusion file into the SV format 
+    
+    Parameters
+    ----------
+    - fusion_file (str): Path to the input fusion file
+    - sv_file (str): Path to the output fusion file
+    '''
+
+    newfile = open(sv_file, 'w')
+    header = ['Sample_Id', 'Site1_Hugo_Symbol', 'Site1_Entrez_Gene_Id',
+              'Site2_Hugo_Symbol', 'Site2_Entrez_Gene_Id', 'SV_Status',
+              'Center', 'Event_Info', 'DNA_support', 'RNA_support', 
+              'Method', 'Site2_Effect_On_Frame', 'Fusion_Status']
+    newfile.write('\t'.join(header) + '\n')
+
+
+    # make a list og fusion events
+    fusions = list_fusions(fusion_file)
+    # parse fusion file
+    genes = parse_fusion(fusion_file)
+
+    if genes and fusions:
+        for sample in fusions:
+            for fusion in fusions[sample]:
+                event = fusion.split('-')
+                while 'None' in event:
+                    event.remove('None')
+                event.sort()
+                Site1_Hugo_Symbol = event[0]
+                Site1_Entrez_Gene_Id = genes[Site1_Hugo_Symbol][sample]['entrez']
+                if len(event) == 1:
+                    Site2_Hugo_Symbol = ''
+                    Site2_Entrez_Gene_Id = ''
+                elif len(event) == 2:
+                    Site2_Hugo_Symbol = event[1]
+                    Site2_Entrez_Gene_Id = genes[Site2_Hugo_Symbol][sample]['entrez']
+                L = [sample, Site1_Hugo_Symbol, Site1_Entrez_Gene_Id, Site2_Hugo_Symbol, Site2_Entrez_Gene_Id,
+                     'SOMATIC', genes[Site1_Hugo_Symbol][sample]['center'], fusion,
+                     genes[Site1_Hugo_Symbol][sample]['dna'], genes[Site1_Hugo_Symbol][sample]['rna'],
+                     genes[Site1_Hugo_Symbol][sample]['method'], genes[Site1_Hugo_Symbol][sample]['frame'],
+                     genes[Site1_Hugo_Symbol][sample]['status']]
+                 
+                newfile.write('\t'.join(L) + '\n')
+    
+    newfile.close()
+    
+
 def process_mutations(maffile, tglpipe, ProcMAF, outdir):
     '''
     (str, bool, bool, str, str) -> None
@@ -1668,7 +1802,7 @@ def make_import_folder(args):
     write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, mapfile, 'cna')
     write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, mapfile, 'cna_seq')
     write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, mapfile, 'cna_seq_rna')
-    write_cases(os.path.join(casedir, 'cases_fusion.txt'), project_name, mapfile, 'fusion')
+    write_cases(os.path.join(casedir, 'cases_sv.txt'), project_name, mapfile, 'sv')
     print('wrote cases')
 
     # write patient and sample clinical information
@@ -1811,14 +1945,24 @@ def make_import_folder(args):
         # generate expression data files
         process_rna(gepfile, enscon, genelist, ProcRNA, outdir)
         print('wrote expression data files')        
-    # generate fusion data and metadata if inout file exists
+    # generate fusion data and metadata if input file exists
     if fusfile:
-        # write fusion metadata
-        write_metadata(os.path.join(cbiodir, 'meta_fusions.txt'), study, 'fusion', genome)
-        print('wrote fusion metadata')
+        # write SV metadata
+        write_metadata(os.path.join(cbiodir, 'meta_sv.txt'), project_name, 'sv', genome)
+        print('wrote SV metadata')
         # generate fusion data files
         process_fusion(fusfile, entcon, minfusionreads, ProcFusion, outdir)
         print('wrote fusion data files')
+        # convert fusion file to SV format
+        # get the path to fusion file
+        data_fusion = os.path.join(cbiodir, "data_fusions.txt")
+        # get the path to sv file
+        data_sv = os.path.join(cbiodir, "data_sv.txt")
+        # convert to sv file
+        convert_fusion_to_sv(data_fusion, data_sv)
+        # remove fusion file
+        if os.path.isfile(data_fusion):
+            os.remove(data_fusion)
     
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
