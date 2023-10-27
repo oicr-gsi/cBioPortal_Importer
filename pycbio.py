@@ -1264,8 +1264,10 @@ def parse_fusion(fusion_file):
         
             if hugo not in D:
                 D[hugo] = {}
-            assert sample not in D[hugo]
-            D[hugo][sample] = d
+            if sample not in D[hugo]:
+                D[hugo][sample] = {}
+            assert fusion not in D[hugo][sample]
+            D[hugo][sample][fusion] = d
        
     return D
     
@@ -1328,6 +1330,7 @@ def convert_fusion_to_sv(fusion_file, sv_file):
     # parse fusion file
     genes = parse_fusion(fusion_file)
 
+
     if genes and fusions:
         for sample in fusions:
             for fusion in fusions[sample]:
@@ -1336,18 +1339,28 @@ def convert_fusion_to_sv(fusion_file, sv_file):
                     event.remove('None')
                 event.sort()
                 Site1_Hugo_Symbol = event[0]
-                Site1_Entrez_Gene_Id = genes[Site1_Hugo_Symbol][sample]['entrez']
+                
+                
+                try:
+                    Site1_Entrez_Gene_Id = genes[Site1_Hugo_Symbol][sample][fusion]['entrez']
+                except:
+                    print(sample)
+                    print(fusion)
+                    print(event)
+                    assert 0 > 1
+                
+                
                 if len(event) == 1:
                     Site2_Hugo_Symbol = ''
                     Site2_Entrez_Gene_Id = ''
                 elif len(event) == 2:
                     Site2_Hugo_Symbol = event[1]
-                    Site2_Entrez_Gene_Id = genes[Site2_Hugo_Symbol][sample]['entrez']
+                    Site2_Entrez_Gene_Id = genes[Site2_Hugo_Symbol][sample][fusion]['entrez']
                 L = [sample, Site1_Hugo_Symbol, Site1_Entrez_Gene_Id, Site2_Hugo_Symbol, Site2_Entrez_Gene_Id,
-                     'SOMATIC', genes[Site1_Hugo_Symbol][sample]['center'], fusion,
-                     genes[Site1_Hugo_Symbol][sample]['dna'], genes[Site1_Hugo_Symbol][sample]['rna'],
-                     genes[Site1_Hugo_Symbol][sample]['method'], genes[Site1_Hugo_Symbol][sample]['frame'],
-                     genes[Site1_Hugo_Symbol][sample]['status']]
+                     'SOMATIC', genes[Site1_Hugo_Symbol][sample][fusion]['center'], fusion,
+                     genes[Site1_Hugo_Symbol][sample][fusion]['dna'], genes[Site1_Hugo_Symbol][sample][fusion]['rna'],
+                     genes[Site1_Hugo_Symbol][sample][fusion]['method'], genes[Site1_Hugo_Symbol][sample][fusion]['frame'],
+                     genes[Site1_Hugo_Symbol][sample][fusion]['status']]
                  
                 newfile.write('\t'.join(L) + '\n')
     
@@ -1956,6 +1969,9 @@ def make_import_folder(args):
         # convert fusion file to SV format
         # get the path to fusion file
         data_fusion = os.path.join(cbiodir, "data_fusions.txt")
+        
+        ### SILENCE SV CONVERSION UNTIL IT'S MORE CLEAR HOW TO CONVERT MULTI-GENE EVENTS
+        
         # get the path to sv file
         data_sv = os.path.join(cbiodir, "data_sv.txt")
         # convert to sv file
