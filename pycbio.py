@@ -1972,13 +1972,13 @@ def make_import_folder(args):
         
         ### SILENCE SV CONVERSION UNTIL IT'S MORE CLEAR HOW TO CONVERT MULTI-GENE EVENTS
         
-        # get the path to sv file
-        data_sv = os.path.join(cbiodir, "data_sv.txt")
-        # convert to sv file
-        convert_fusion_to_sv(data_fusion, data_sv)
-        # remove fusion file
-        if os.path.isfile(data_fusion):
-            os.remove(data_fusion)
+        # # get the path to sv file
+        # data_sv = os.path.join(cbiodir, "data_sv.txt")
+        # # convert to sv file
+        # convert_fusion_to_sv(data_fusion, data_sv)
+        # # remove fusion file
+        # if os.path.isfile(data_fusion):
+        #     os.remove(data_fusion)
     
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
