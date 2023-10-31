@@ -1219,12 +1219,11 @@ def process_fusion(fusfile, entcon, min_fusion_reads, ProcFusion, outdir):
         raise FileNotFoundError('Cannot find R script path {}'.format(ProcFusion))
 
 
-
 def parse_fusion(fusion_file):
     '''
     (str) -> dict
     
-    Returns a dictionary with SV information
+    Returns a dictionary with fusion information
     
     Parameters
     ----------
@@ -1253,7 +1252,19 @@ def parse_fusion(fusion_file):
             frame = i[8]
             status = i[9]
         
-            d = {'entrez': entrez,
+            # change gene separator in fusion name
+            if 'None-' in fusion:
+                fusion = fusion.replace('None-', 'None;')
+            elif '-None' in fusion:
+                fusion = fusion.replace('-None', ';None')
+            else:
+                if hugo + '-'  in fusion:
+                    fusion = fusion.replace(hugo + '-', hugo + ';')
+                elif '-' + hugo in fusion:
+                    fusion = fusion.replace('-' + hugo, ';' + hugo)
+            
+            d = {'hugo': hugo,
+                'entrez': entrez,
                  'center': center,
                  'fusion': fusion,
                  'dna': dna,
@@ -1262,49 +1273,40 @@ def parse_fusion(fusion_file):
                  'frame': frame,
                  'status': status}
         
-            if hugo not in D:
-                D[hugo] = {}
-            if sample not in D[hugo]:
-                D[hugo][sample] = {}
-            assert fusion not in D[hugo][sample]
-            D[hugo][sample][fusion] = d
+            if sample not in D:
+                D[sample] = {}
+            if fusion not in D[sample]:
+                D[sample][fusion] = []
+            D[sample][fusion].append(d) 
+            
        
-    return D
-    
-   
-    
-def list_fusions(fusion_file):
+    return D   
+
+
+def list_genes(fusion_file):
     '''
-    (str) -> dict
+    (str, str) -> str
     
-    Returns a dictionary with fusion events for each sample
-       
+    Returns a list of valid Hugo genes with fusion events
+        
     Parameters
     ----------
-    - fusion_file (str): Path to the file with fusion information
-    '''    
-
-    fusions = {}
+    - fusion_file (str): Path to the input fusion file
+    '''
     
     infile = open(fusion_file)
     header = infile.readline().rstrip().split('\t')
-    content = infile.read().rstrip()
-    infile.close()
-        
-    if content:
-        content = content.split('\n')
-        for i in content:
-            i = i.split('\t')
-            sample = i[3]
-            fusion = i[4]
-        
-            if sample not in fusions:
-                fusions[sample] = set()
-            fusions[sample].add(fusion)
+    genes = []
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            genes.append(line[0])
+    genes = list(set(genes))
     
-    return fusions
-    
+    return genes
 
+    
 def convert_fusion_to_sv(fusion_file, sv_file):
     '''
     (str, str) -> str
@@ -1324,45 +1326,55 @@ def convert_fusion_to_sv(fusion_file, sv_file):
               'Method', 'Site2_Effect_On_Frame', 'Fusion_Status']
     newfile.write('\t'.join(header) + '\n')
 
-
-    # make a list og fusion events
-    fusions = list_fusions(fusion_file)
+    # list all gene names with fusion events
+    gene_names = list_genes(fusion_file)
     # parse fusion file
     genes = parse_fusion(fusion_file)
-
-
-    if genes and fusions:
-        for sample in fusions:
-            for fusion in fusions[sample]:
-                event = fusion.split('-')
+    
+    for sample in genes:
+        for fusion in genes[sample]:
+            Site1_Hugo_Symbol, Site2_Hugo_Symbol, Site1_Entrez_Gene_Id, Site1_Entrez_Gene_Id = '', '', '', ''
+            event = fusion.split(';')
+            if 'None' in event:
                 while 'None' in event:
                     event.remove('None')
-                event.sort()
+                assert len(event) == 1
                 Site1_Hugo_Symbol = event[0]
-                
-                
-                try:
-                    Site1_Entrez_Gene_Id = genes[Site1_Hugo_Symbol][sample][fusion]['entrez']
-                except:
-                    print(sample)
-                    print(fusion)
-                    print(event)
-                    assert 0 > 1
-                
-                
-                if len(event) == 1:
+                Site2_Hugo_Symbol = ''
+                #Site2_Entrez_Gene_Id = ''
+            else:
+                if event[0] not in gene_names:
+                    Site1_Hugo_Symbol = event[1]
                     Site2_Hugo_Symbol = ''
+                    #Site2_Entrez_Gene_Id = ''
+                elif event[1] not in gene_names:
+                    Site1_Hugo_Symbol = event[0]
+                    Site2_Hugo_Symbol = ''
+                    #Site2_Entrez_Gene_Id = ''
+                else:
+                    Site1_Hugo_Symbol, Site2_Hugo_Symbol = event[0], event[1]
+                    assert Site1_Hugo_Symbol in gene_names and Site2_Hugo_Symbol in gene_names
+                       
+            center, dna, rna, method, frame, status = '', '', '', '', '', ''
+            for d in genes[sample][fusion]:
+                if d['hugo'] == Site1_Hugo_Symbol:
+                    Site1_Entrez_Gene_Id = d['entrez']
+                    center = d['center']
+                    dna = d['dna']
+                    rna = d['rna']
+                    method = d['method']
+                    frame = d['frame']
+                    status = d['status']
+                elif d['hugo'] == Site2_Hugo_Symbol:
+                    Site2_Entrez_Gene_Id = d['entrez']            
+                if not Site2_Hugo_Symbol:
                     Site2_Entrez_Gene_Id = ''
-                elif len(event) == 2:
-                    Site2_Hugo_Symbol = event[1]
-                    Site2_Entrez_Gene_Id = genes[Site2_Hugo_Symbol][sample][fusion]['entrez']
-                L = [sample, Site1_Hugo_Symbol, Site1_Entrez_Gene_Id, Site2_Hugo_Symbol, Site2_Entrez_Gene_Id,
-                     'SOMATIC', genes[Site1_Hugo_Symbol][sample][fusion]['center'], fusion,
-                     genes[Site1_Hugo_Symbol][sample][fusion]['dna'], genes[Site1_Hugo_Symbol][sample][fusion]['rna'],
-                     genes[Site1_Hugo_Symbol][sample][fusion]['method'], genes[Site1_Hugo_Symbol][sample][fusion]['frame'],
-                     genes[Site1_Hugo_Symbol][sample][fusion]['status']]
-                 
-                newfile.write('\t'.join(L) + '\n')
+            
+            assert center and dna and rna and method and frame and status
+            L = [sample, Site1_Hugo_Symbol, Site1_Entrez_Gene_Id, Site2_Hugo_Symbol,
+                 Site2_Entrez_Gene_Id, 'SOMATIC', center, fusion.replace(';', '-'),
+                 dna, rna, method, frame, status]
+            newfile.write('\t'.join(L) + '\n')
     
     newfile.close()
     
@@ -1970,15 +1982,13 @@ def make_import_folder(args):
         # get the path to fusion file
         data_fusion = os.path.join(cbiodir, "data_fusions.txt")
         
-        ### SILENCE SV CONVERSION UNTIL IT'S MORE CLEAR HOW TO CONVERT MULTI-GENE EVENTS
-        
-        # # get the path to sv file
-        # data_sv = os.path.join(cbiodir, "data_sv.txt")
-        # # convert to sv file
-        # convert_fusion_to_sv(data_fusion, data_sv)
-        # # remove fusion file
-        # if os.path.isfile(data_fusion):
-        #     os.remove(data_fusion)
+        # get the path to sv file
+        data_sv = os.path.join(cbiodir, "data_sv.txt")
+        # convert to sv file
+        convert_fusion_to_sv(data_fusion, data_sv)
+        # remove fusion file
+        if os.path.isfile(data_fusion):
+            os.remove(data_fusion)
     
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
