@@ -725,7 +725,7 @@ def write_metadata(outputfile, project_name, data_type, genome):
          'genetic_alteration_type: {0}'.format(alteration)]
 
     # add specific data type text
-    if data_type in ['discrete', 'log2-value', 'fusion', 'expression', 'zscore', 'maf']:
+    if data_type in ['discrete', 'log2-value', 'sv', 'expression', 'zscore', 'maf']:
         L.extend(['stable_id: {0}'.format(stable_id),
                   'show_profile_in_analysis_tab: {0}'.format(show_profile),
                   'profile_name: {0}'.format(name)])
