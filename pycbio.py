@@ -1501,7 +1501,7 @@ def check_configuration(config):
         raise ValueError('ERROR. Provide valid path for {0}'.format(', '.join(invalid_resource_files)))
     
     # check options
-    missing_options = [i for i in ['mapfile', 'outdir', 'study', 'center', 'cancer_code'] if config['Options'][i] is None]
+    missing_options = [i for i in ['mapfile', 'outdir', 'study', 'center', 'cancer_code', 'keep_variants'] if config['Options'][i] is None]
     if missing_options:
         raise ValueError('ERROR. Provide values for {0} in the config'.format(', '.join(missing_options)))
     # check map file
@@ -1577,10 +1577,10 @@ def extract_options_from_config(config):
     - config (configparser.ConfigParser): Config file parsed with configparser
     '''    
     
-    options = ['mapfile', 'outdir', 'project_name', 'description', 'study', 'center', 'cancer_code', 'genome']
+    options = ['mapfile', 'outdir', 'project_name', 'description', 'study', 'center', 'cancer_code', 'genome', 'keep_variants']
     L = [config['Options'][i] for i in options]
-    mapfile, outdir, project_name, description, study, center, cancer_code, genome = L
-    return mapfile, outdir, project_name, description, study, center, cancer_code, genome
+    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = L
+    return mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants
 
 
 def extract_parameters_from_config(config):
@@ -1780,7 +1780,7 @@ def make_import_folder(args):
     
     # extract variables from config
     ProcMAF, ProcCNA, ProcRNA, ProcFusion, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
-    mapfile, outdir, project_name, description, study, center, cancer_code, genome = extract_options_from_config(config)
+    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
     print('extracted variables from config')
@@ -1903,7 +1903,7 @@ def make_import_folder(args):
         maffile = os.path.join(mafdir, 'input.maf.txt')
         # filter mutations and indels if option is activated
         if filter_variants:
-            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, args.keep_variants)
+            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants)
             print("before mutations filtering: ", total)
             print("after mutations filtering: ", kept)
             print('filtered variants')
@@ -2068,7 +2068,6 @@ if __name__ == '__main__':
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
     g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
-    g_parser.add_argument('--keep_variants', dest='keep_variants', action='store_true', help='Keep variants with missing gnomAD_AF when Matched_Norm_Sample_Barcode is unmatched with this flag. By default, these variants are discarded')
     g_parser.set_defaults(func=make_import_folder)
     
     # import folder to gsi cbioportal instance
