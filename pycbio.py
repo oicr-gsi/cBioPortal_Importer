@@ -1769,7 +1769,37 @@ def make_import_folder(args):
     Parameters
     ----------
     - config (str): Path to the config file
+    - clinical (str): Path to the sample clinical file
+    - append_data (bool): Merge the data in the newly created importer folder
+                          to data in an existing import folder if True
+    - merge_config (str): Path to the config file used to generate a previous
+                          import folder in which data should be merged
+    - merge_import_folder (str): Path to the previous import folder
+                                 in which data should be merged
     '''
+    
+    # check if data needs to be merged with a previous import folder
+    if args.append_data:
+        if any(map(lambda x: x is None, [args.merge_config, args.merge_import_folder])) or any(map(lambda x: os.path.isdir(x) == False, [args.merge_config, args.merge_import_folder])):
+            raise ValueError('Provide the config file and path to the previous import folder')
+    else:
+        if args.merge_config or args.merge_import_folder:
+            raise ValueError('Paths to the previous config and import folder can only be used when merging data')
+        
+    
+    
+    
+    
+    # check that options match between the 2 configs
+    
+    # check that genome is the same
+    
+    # 
+    
+    
+    
+    
+    
     
     # parse config file
     config = configparser.ConfigParser(allow_no_value=True)
@@ -1786,6 +1816,12 @@ def make_import_folder(args):
     print('extracted variables from config')
     
     
+    # check that outdir is different than import folder dir
+    if args.append_data:
+        if outdir == args.merge_import_folder:
+            raise ValueError('''WARNING. The output directory is the same as the importer folder you want to merge.
+                             Review the config file and/or provide a different path to the merging import folder''') 
+       
     # check that input maf files, if any, have the same format and the same header
     check_input_mafs(mapfile)
         
@@ -1805,6 +1841,12 @@ def make_import_folder(args):
     # check that cancer type is correctly defined
     check_cancer_type(cancer_code)
     print('checked cancer code')
+
+
+    
+
+
+
 
     # create output directory and output sub-folders. remove output directory if it exists
     cbiodir, casedir, suppdir = create_output_directories(outdir)
@@ -2068,6 +2110,9 @@ if __name__ == '__main__':
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
     g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
+    g_parser.add_argument('--append', dest='append_data', action='store_true', help='Merge the data in the newly created importer folder to data in an existing import folder if activated. Default is False')
+    g_parser.add_argument('-mcf', '--MergeConfig', dest='merge_config', help='Path to the config file used to generate a previous import folder in which data should be merged')
+    g_parser.add_argument('-mid', '--MergeImportDirectory', dest='merge_import_folder', help='Path to the previous import folder in which data should be merged')
     g_parser.set_defaults(func=make_import_folder)
     
     # import folder to gsi cbioportal instance
