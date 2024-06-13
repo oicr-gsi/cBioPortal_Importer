@@ -136,7 +136,7 @@ def get_genome_version(mapfile):
     '''
     (str) -> str
     
-    Returns the genome version (hg19 or hg38) using the ref of the first MAF file listed in the map file
+    Returns the genome version (hg19 or hg38) found in each MAF file listed in the map file
     or an empty string if no MAF files are present in the map file
     
     Parameters
@@ -147,22 +147,25 @@ def get_genome_version(mapfile):
     # get the 1st maf listed in mapfile
     mafs = extract_files_from_map(mapfile, 'maf')
     if mafs:
-        maf = mafs[0]
-        # grab genome column in maf. skipping header and commented lines
-        infile = gzip.open(maf, 'rt')
-        ncbiGenome = []
-        for line in infile:
-            if not line.startswith('#') and 'Hugo_Symbol' not in line:
-                line = line.rstrip().split('\t')
-                ncbiGenome.append(line[3])              
-        infile.close()
-        # reduce list to genome value
-        ncbiGenome = list(set(ncbiGenome))[0]
-        # convert genome identifier
-        if ncbiGenome == "GRCh38":
-            genomev="hg38"
-        elif ncbiGenome == "GRCh37":
-            genomev="hg19"
+        L = []
+        for i in mafs:
+            # grab genome column in maf. skipping header and commented lines
+            infile = gzip.open(i, 'rt')
+            ncbiGenome = []
+            for line in infile:
+                if not line.startswith('#') and 'Hugo_Symbol' not in line:
+                    line = line.rstrip().split('\t')
+                    ncbiGenome.append(line[3])              
+            infile.close()
+            # reduce list to genome value
+            ncbiGenome = list(set(ncbiGenome))[0]
+            # convert genome identifier
+            if ncbiGenome == "GRCh38":
+                genomev="hg38"
+            elif ncbiGenome == "GRCh37":
+                genomev="hg19"
+            L.append(genomev)
+        genomev = ';'.join(list(set(L)))
     else:
         genomev = ''
     return genomev        
@@ -1829,9 +1832,9 @@ def make_import_folder(args):
     genomev = get_genome_version(mapfile)
     if genomev:
         if genome != genomev:
-            raise ValueError('ERROR. Reference in MAF file does not match reference in config')
+            raise ValueError('ERROR. Reference in MAF file does not match reference in config: {0} vs {1}'.format(genome, genomev))
         else:
-            print('hecked reference genome: {0}'.format(genome))
+            print('validated reference genome: {0}'.format(genome))
     # get genome specific variables
     if genome == 'hg38':
         enscon, genebed = enscon_hg38, genebed_hg38
