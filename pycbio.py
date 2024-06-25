@@ -548,9 +548,6 @@ def parse_clinical_samples(append_data, merge_import_folder, clinical_sample = '
 
 
 
-
-
-
 def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merge_patient_clinical_info=None):
     '''
     (str, str, str, list | None) -> None
@@ -590,7 +587,8 @@ def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merg
         T.append('\t'.join(i + [''] * (len(T[0].split('\t')) - len(i))))
         
     newfile = open(outputfile, 'w')
-    newfile.write('\n'.join(T))
+    for i in T:
+        newfile.write(i + '\n')
     newfile.close()
 
 
