@@ -498,8 +498,10 @@ def parse_clinical_patients(append_data, merge_import_folder, clinical_patient =
                 pos = [i for i in range(len(positions)) if positions[i]]
                 if pos:
                     content.pop(pos[0])
-        for i in range(len(content)):
-            content[i] = content[i].split('\t')
+            if 'PATIENT_ID' in content[0]:
+                content.pop(0)
+            for i in range(len(content)):
+                content[i] = content[i].split('\t')
     else:
         content = []
     return content
