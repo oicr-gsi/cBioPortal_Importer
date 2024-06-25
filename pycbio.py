@@ -2246,6 +2246,31 @@ def get_samples_merge(append_data, merge_import_folder, case_file):
             samples = list(map(lambda x: x.strip(), samples.split('\t')))
     
     return samples                    
+
+
+def check_fusion_data(fusfile):
+    '''
+    (str) -> bool
+    
+    Returns True if fusfile contains SV variants and False otherwise
+    
+    Parameters
+    ----------
+    - fusfile (str): Path to the concatenated fusion file
+    '''
+    
+    infile = open(fusfile)
+    header = infile.readline()
+    data = infile.read().strip()
+    infile.close()
+    
+    if data:
+        return True
+    else:
+        return False
+    
+
+
       
 
 def make_import_folder(args):
@@ -2393,6 +2418,11 @@ def make_import_folder(args):
         # concatenate fusion files, if they exist
         concatenate_fusion_files(fusdir, fusfile, merge_fus)
         print('concatenated fusion files')
+        # check if fusion data
+        if check_fusion_data(fusfile) == False:
+            fusfile = ''
+            print('no fusion data in concatenated fusion file')
+        
     else:
         fusfile = ''
     
