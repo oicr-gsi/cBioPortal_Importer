@@ -59,7 +59,7 @@ def extract_files_from_map(mapfile, data_type):
 
 def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep):
     '''
-    (str, str) -> None
+    (str, str, str, str, str, str) -> None
     
     Create sub-directories in outdir for each type of file listed in map file if at least 1 such file exists.
     Also create sub-directories if data from a previous impor folder exists and need to be merged even if no such data 
@@ -84,9 +84,9 @@ def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, m
 
     # create input directories if data from previous import folder needs to be merged
     data_files = [merge_maf, merge_seg, merge_fus, merge_gep]
-    data_dirs = [['mafdir', 'segdir', 'gepdir', 'fusdir']]
+    data_dirs = ['mafdir', 'segdir', 'gepdir', 'fusdir']
     for i in range(len(data_files)):
-        if data_files[i]:
+        if data_files[i] and os.path.isfile(data_files[i]):
             filedir = os.path.join(outdir, data_dirs[i])
             os.makedirs(filedir, exist_ok=True)
 
