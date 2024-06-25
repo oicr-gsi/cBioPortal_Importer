@@ -656,7 +656,11 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
             for field in sample_info[ID]:
                 data[ID][positions[field]] = sample_info[ID][field]      
 
-     
+    
+    for ID in data:
+        assert len(data[ID]) == len(T[0])
+    
+
     # write sample clinical file    
     newfile = open(outputfile, 'w')
     for i in T:
@@ -664,12 +668,8 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
     # sort Ids
     IDs = sorted(list(data.keys()))
     for ID in IDs:
-        L = [ID.split(';')[0], ID.split(';')[1]]
-        pos = sorted(list(data[ID].keys()))
-        for i in pos:
-            L.append(data[ID][i])
-        L = list(map(lambda x: str(x), L))
-        newfile.write('\t'.join(L) + '\n')
+        data[ID] = list(map(lambda x: str(x), data[ID]))
+        newfile.write('\t'.join(data[ID]) + '\n')
     newfile.close()
 
 
@@ -2580,7 +2580,6 @@ if __name__ == '__main__':
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
     g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
-    g_parser.add_argument('--keep_variants', dest='keep_variants', action='store_true', help='Keep variants with missing gnomAD_AF when Matched_Norm_Sample_Barcode is unmatched with this flag. By default, these variants are discarded')
     g_parser.add_argument('--append', dest='append_data', action='store_true', help='Create an import folder by merging data from an existing import folder if True')
     g_parser.add_argument('-mid', '--MergeImportDirectory', dest='merge_import_folder', help='Path to the previous import folder in which data should be merged')
     g_parser.set_defaults(func=make_import_folder)
