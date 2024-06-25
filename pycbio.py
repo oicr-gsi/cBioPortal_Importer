@@ -490,7 +490,7 @@ def parse_clinical_patients(append_data, merge_import_folder, clinical_patient =
         filepath = os.path.join(merge_cbiodir, clinical_patient)
         if os.path.isfile(filepath):
             infile = open(filepath)
-            content = infile.read().rstrip()
+            content = infile.read().rstrip().split('\n')
             infile.close()
             # get rid of the header
             while any(map(lambda x: x.startswith('#'), content)):
