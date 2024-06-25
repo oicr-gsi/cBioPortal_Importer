@@ -1026,7 +1026,7 @@ def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
     header = '\t'.join(header)
     # write header to outputfile
     newfile = open(outputfile, 'w')
-    newfile.write(header)
+    newfile.write(header + '\n')
     
     for file in fusfiles:
         # extract sample name from file name
