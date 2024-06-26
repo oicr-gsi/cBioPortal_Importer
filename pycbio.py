@@ -1917,8 +1917,10 @@ def extract_options_from_config(config):
     - config (configparser.ConfigParser): Config file parsed with configparser
     '''    
     
-    options = ['mapfile', 'outdir', 'project_name', 'description', 'study', 'center', 'cancer_code', 'genome', 'keep_variants']
+    options = ['mapfile', 'outdir', 'project_name', 'description', 'study', 'center', 'cancer_code', 'genome']
     L = [config['Options'][i] for i in options]
+    # add boolean filter
+    L.append(config['Options'].getboolean('keep_variants'))
     mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = L
     return mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants
 
