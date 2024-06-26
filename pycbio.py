@@ -1842,7 +1842,12 @@ def check_configuration(config):
     # check map file
     if os.path.isfile(config['Options']['mapfile']) == False:
         raise ValueError('ERROR: Provide valid path to mapfile in config')
-    
+    # check that bbolean filter parameter is provided
+    try:
+        keep_variants = config['Options'].getboolean('keep_variants')
+    except:
+        raise ValueError('ERROR. {0} is not a boolean. Use true or false'.format(keep_variants))
+        
     # check parameters
     expected_parameters = ['gain', 'amplification', 'heterozygous_deletion', 'homozygous_deletion', 'minfusionreads']
     missing_parameters = [i for i in expected_parameters if i not in list(config['Parameters'].keys())]
