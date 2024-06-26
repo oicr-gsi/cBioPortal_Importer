@@ -528,21 +528,22 @@ def parse_clinical_samples(append_data, merge_import_folder, clinical_sample = '
         # get expected folders in the import folder
         merge_cbiodir, merge_casedir, merge_suppdir, merge_mafdir, merge_segdir, merge_gepdir, merge_fusdir = get_directories(merge_import_folder)
         filepath = os.path.join(merge_cbiodir, clinical_sample)
-        infile = open(filepath)
-        content = infile.read().rstrip()
-        infile.close()
+        if os.path.isfile(filepath):
+            infile = open(filepath)
+            content = infile.read().rstrip().split('\n')
+            infile.close()
 
-        datatype = content[2].split('\t')
-        header = content[4].split('\t')
+            datatype = content[2].split('\t')
+            header = content[4].split('\t')
     
-        for i in content[5:]:
-            i = i.split('\t')
-            patient, sample = i[0], i[1]
-            ID = patient + ';' + sample
-            D[ID] = {}
-            for j in range(len(i)):
-                if j >= 2:
-                    D[ID][header[j]] = {'value': i[j], 'datatype': datatype[j]}
+            for i in content[5:]:
+                i = i.split('\t')
+                patient, sample = i[0], i[1]
+                ID = patient + ';' + sample
+                D[ID] = {}
+                for j in range(len(i)):
+                    if j >= 2:
+                        D[ID][header[j]] = {'value': i[j], 'datatype': datatype[j]}
                 
     return D
 
@@ -696,7 +697,7 @@ def parse_clinical_oncokb(append_data, merge_import_folder, clinical_oncokb = 'o
         if os.path.isfile(filepath):
             infile = open(filepath)
             infile.readline()
-            L = infile.read().rstrip()
+            L = infile.read().rstrip().split('\n')
             for i in range(len(L)):
                 L[i] = L[i].split('\t')[0]
             infile.close()
