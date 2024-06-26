@@ -1,4 +1,4 @@
-﻿# cBioPortal Importer#
+﻿#cBioPortal Importer
 
 Script pycbio.py is used to generate an import folder with all the data and metadata files required for uploading data to cBioPortal.
 
@@ -11,6 +11,7 @@ The module will also load accessory tools in the environment required for proces
 Currently, data accepted for CbioPortal uploads are maf files from the VEP workflow, .seg files from sequenza, .genes.results files from the rsem workflow and .tab from the mavis workflow.
 
 The data should be organized in a comma-separated map.csv file with the following information:
+
 `patient_id,sample_id,maf_file.maf.gz,seg_file.seg,rsem.genes.results,mavis.tab`
 
 Options, including path the output directory, path to the mapping file and filters can be specified in the config file
@@ -30,10 +31,11 @@ Data uploaded to cBioPortal will replace any data alreay on the server. To add n
 
 ```cbio_importer generate generate -cf /path/to/config/ --ammend -mid /path/to/previous/outputdirectory```
 
-Note that the /path/to/previous/outputdirectory is the outdir in the config file used to generate the previous import folder. Its it not the import folder itself.
+Note that the `/path/to/previous/outputdirectory` is the outdir in the config file used to generate the previous import folder. Its it not the import folder itself.
 
 Example command:
-cbio_importer generate -cf /.mounts/labs/gsiprojects/gsi/gsiusers/rjovelin/cbiportal_importer_dev/config_cbioportal_batch2.ini --append -mid /.mounts/labs/gsiprojects/gsi/gsiusers/rjovelin/cbiportal_importer_dev/batch1/out/
+
+```cbio_importer generate -cf /.mounts/labs/gsiprojects/gsi/gsiusers/rjovelin/cbiportal_importer_dev/config_cbioportal_batch2.ini --append -mid /.mounts/labs/gsiprojects/gsi/gsiusers/rjovelin/cbiportal_importer_dev/batch1/out/```
 
 
 Parameters
