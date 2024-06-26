@@ -995,6 +995,33 @@ def write_metadata(outputfile, project_name, data_type, genome):
     
 
 
+def select_fusion_file_for_header(fusfiles):
+    '''
+    (list) -> str
+    
+    Returns the first fusion file with calls from the list of fusion files or 
+    the first file if there no calls in each of the files
+    '''
+    
+    if fusfiles:
+        L = []
+        for i in fusfiles:
+            infile = open(i)
+            content = infile.read().strip().split('\n')
+            infile.close()
+            if len(content) > 1:
+                L.append(i)  
+                break
+        if L:
+            return L[0]
+        else:
+            return fusfiles[0]
+    else:
+        return []
+
+
+
+
 def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
     '''
     (str, str, str | None) -> None
@@ -1012,8 +1039,10 @@ def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
     # make a list of fusion files
     fusfiles = [os.path.join(fusdir, i) for i in os.listdir(fusdir) if '.fus' in i]
     if fusfiles:
-        # get the header of the seg file
-        infile = open(fusfiles[0])
+        # get the header of the fusion file containing data
+        # headers of fusion files with data have an extra column
+        fusion_file = select_fusion_file_for_header(fusfiles)
+        infile = open(fusion_file)
         header = infile.readline().rstrip().split('\t')
         infile.close()
     elif merge_fus:
