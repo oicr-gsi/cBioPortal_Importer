@@ -1,4 +1,4 @@
-﻿#cBioPortal Importer
+﻿#cBioPortal Importer#
 
 Script pycbio.py is used to generate an import folder with all the data and metadata files required for uploading data to cBioPortal.
 
@@ -27,9 +27,9 @@ It is possible to add user-defined clinical fields using an optional tab-delimit
 ```cbio_importer generate -cf /path/to/config -cl /path/to/clinical_information```
 
 
-Data uploaded to cBioPortal will replace any data alreay on the server. To add new data without replacing the existing data it is possible to merge data from existing import folder to new data. The raw data from the existing folder will be added to and processed with the new data to generate a new import folder. This allows to 1) upload data for which the original files have been deleted, 2) add data incrementally to cBioPortal. 
+Data uploaded to cBioPortal will replace any data already on the server. To add new data without replacing the existing data it is possible to merge data from existing import folder to new data. The raw data from the existing folder will be added to and processed with the new data to generate a new import folder. This allows to 1) upload data for which the original files have been deleted, 2) add data incrementally to cBioPortal. 
 
-```cbio_importer generate generate -cf /path/to/config/ --ammend -mid /path/to/previous/outputdirectory```
+```cbio_importer generate generate -cf /path/to/config/ --append -mid /path/to/previous/outputdirectory```
 
 Note that the `/path/to/previous/outputdirectory` is the outdir in the config file used to generate the previous import folder. Its it not the import folder itself.
 
