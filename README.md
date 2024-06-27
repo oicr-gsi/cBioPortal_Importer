@@ -1,4 +1,4 @@
-﻿#cBioPortal Importer#
+﻿# cBioPortal Importer
 
 Script pycbio.py is used to generate an import folder with all the data and metadata files required for uploading data to cBioPortal.
 
