@@ -795,38 +795,6 @@ def link_files(outdir, mapfile, data_type):
         print('Cannot link {0} files. No files exist in mapping file {1}'.format(data_type, mapfile))
 
 
-def link_rsem_files_comparison(compdir, gepcomp):
-    '''
-    (str, str) -> None   
-    
-    Links the rsem files listed in gepcomp in the compdir directory
-    
-    Parameters
-    ----------
-    - compdir (str): 
-    - gepcomp (str): Path to the gepcomp file with comma-separated list of samples, rsem paths    
-    '''
- 
-    infile = open(gepcomp)
-    samples, files = [], []
-    for line in infile:
-        line = line.rstrip()
-        if line:
-            line = line.split(',')
-            # check that file is valid
-            if os.path.isfile(line[1].strip()):
-                # collect sample and file
-                samples.append(line[0].strip())
-                files.append(line[1].strip())
-    infile.close()
-    assert len(samples) == len(files)            
-            
-    if files:
-        for i in range(len(files)):
-            target = os.path.join(compdir, samples[i] + '.rsem')
-            if os.path.exist(target) == False:
-                subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)    
-            
 
 def get_sample_from_filename(file):
     '''
@@ -1255,42 +1223,7 @@ def concatenate_fpkm_from_gep_files(gepdir, outputfile, merge_gep):
     write_fpkm_to_file(D, outputfile)
 
 
-def update_fpkm_file(fpkm_file, compdir):
-    '''
-    (str, str) -> None
-    
-    Update fpkm file with expression data of samples in compdir
-    
-    Parameters
-    ----------
-    - fpkm_file (str): Path to the file with fpkm for each gene and sample
-    - compdir (str): Directory with rsem files located in gepcomp is option is used in config
-    '''
-
-    # collect fpkm from rsem files in compdir
-    D = collect_fpkm(compdir)
-    
-    # extract fpkm from fpkm_file
-    infile = open(fpkm_file)
-    # make a list of samples as theu appear in header
-    samples = infile.readline().rstrip().split('\t')[1:]    
-    for line in infile:
-        line = line.rstrip()
-        if line != '':
-            line = line.split('\t')
-            gene = line[0]
-            fpkm = line[1:]
-            # updare D with sample if not already recorded
-            for i in range(len(samples)):
-                if samples[i] not in D:
-                    D[samples[i]] = {}
-                # keep fpkm from sample in current study if already recoded in gepcomp
-                D[samples[i]][gene] = fpkm[i]
-
-    # update fpkm_file with data from gepcomp 
-    write_fpkm_to_file(D, fpkm_file)
-    
-    
+   
 def get_maf_header(maffile):
     '''
     (str) -> str
