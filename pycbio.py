@@ -2319,13 +2319,10 @@ def make_import_folder(args):
         
     Parameters
     ----------
-    
-    
-    
-    
-    
-    
-    
+    - config (str): Path to the config file
+    - clinical (str): Path to the sample clinical file
+    - append_data (bool): Create an import folder by merging data from an existing import folder if True
+    - merge_import_folder (str): Path to the previous import folder in which data should be merged
     '''
     
     # parse config file
