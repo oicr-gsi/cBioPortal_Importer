@@ -2636,11 +2636,8 @@ def make_import_folder(args):
         # convert to sv file
         convert_fusion_to_sv(data_fusion, data_sv)
         # move fusion file to supplementary directory
-        # if os.path.isfile(data_fusion):
-        #     os.remove(data_fusion)
-        
         if os.path.isfile(data_fusion):
-            os.rename(data_fusion, new_data_fusion = os.path.join(suppdir, os.basename(data_fusion)))    
+            os.rename(data_fusion, new_data_fusion = os.path.join(suppdir, os.path.basename(data_fusion)))    
                     
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
