@@ -1124,6 +1124,7 @@ def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
     
     # determine if the headers have WT, WG or both
     header_types = get_fusfiles_header(fusfiles, merge_fus)
+      
     data_types = []
     for i in header_types:
         data_types.extend(header_types[i])
@@ -1148,7 +1149,7 @@ def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
     # add extra columns indicating the origin of the data
     for i in data_types:
         header.insert(-1, i)
-        
+    
     # add sample to header
     header.insert(0, 'Sample')
     
@@ -1172,7 +1173,7 @@ def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
                         newline.append(d[header[i]])
                     elif header[i] not in d:
                         newline.append('')
-            newfile.write('\t'.join(newline) + '\n')
+                newfile.write('\t'.join(newline) + '\n')
         
     # add data from pervious import folder to merge if it exists
     if merge_fus:
@@ -2634,10 +2635,13 @@ def make_import_folder(args):
         data_sv = os.path.join(cbiodir, "data_sv.txt")
         # convert to sv file
         convert_fusion_to_sv(data_fusion, data_sv)
-        # remove fusion file
+        # move fusion file to supplementary directory
+        # if os.path.isfile(data_fusion):
+        #     os.remove(data_fusion)
+        
         if os.path.isfile(data_fusion):
-            os.remove(data_fusion)
-    
+            os.rename(data_fusion, new_data_fusion = os.path.join(suppdir, os.basename(data_fusion)))    
+                    
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
     if os.path.isfile(os.path.join(suppdir, 'data_CNA_short.txt')):
