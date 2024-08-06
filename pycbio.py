@@ -2517,6 +2517,50 @@ def exclude_donors(mapfile, append_data, merge_import_folder, removed_samples):
 
 
 
+
+def remove_samples_from_maf(maffile, discarded_samples):
+    '''
+    (str, list) -> int
+    
+    Delete mutations from the maf file for samples in discarded samples
+    and returns the number of removed mutations
+    
+    Parameters
+    ----------
+    - maffile (str): Path to the concatenated maf file
+    - discarded_samples (list): List of samples to exclude
+    '''
+
+    # create a list of data excluding the discarded samples
+    content = []
+    # count the number of mutations removed
+    removed = 0
+    
+    infile = open(maffile)
+    # add header
+    content.append(infile.readline().rstrip())
+    # parse file content and skip lines containing the discarded samples
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            # keep mutations for samples not in discarded samples
+            if line[15] not in discarded_samples:
+                content.append('\t'.join(line))
+            else:
+                removed += 1
+    infile.close()
+    
+    # open maffile for writing
+    newfile = open(maffile, 'w')
+    for i in content:
+        newfile.write(i + '\n')
+    newfile.close()        
+    
+    return removed
+
+
+
 def make_import_folder(args):
     '''
     (list) -> None
@@ -2644,21 +2688,12 @@ def make_import_folder(args):
                           discarded_samples=excluded_samples)
     print('wrote oncoKb clinical information') 
     
-
-
-
-    #### continue here
-    
-
-
-
-
     
     # link files
     for i in ['maf', 'seg', 'gep', 'fus']:
         link_files(outdir, mapfile, i)
     print('linked files to input directories')
-    
+     
         
     # concatenate input files
     # concatenate mafs    
@@ -2672,7 +2707,7 @@ def make_import_folder(args):
         print('concatenated maf files')
     else:
         mutation_file = ''
-        
+    
     # check if seg dir and seg files exist
     segs = extract_files_from_map(mapfile, 'seg')
     segdir = os.path.join(outdir, 'segdir')
@@ -2713,6 +2748,26 @@ def make_import_folder(args):
         print('concatenated fpkm from gep files')
     else:
         gepfile = ''
+    
+    
+    
+    
+    #### continue here
+    
+    
+    # remove samples from the data files
+    if excluded_samples:
+        if mutation_file:
+            removed_mutations = remove_samples_from_maf(mutation_file, excluded_samples)
+            print('Removed {0} mutations for {1} in mutation file {2}'.format(removed_mutations, len(excluded_samples), mutation_file))
+       
+       
+        
+    
+    
+    
+    
+    
     
     
     # filter maf files and write metadata
