@@ -202,9 +202,9 @@ def check_genome_version(mapfile, genome, merge_maf=None):
 
 
 
-def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = None):
+def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = None, discarded_samples = None):
     '''
-    (str, str, str, str) -> None
+    (str, str, str, str, str|None, str|None) -> None
     
     Write list of samples profiled for data type 
             
@@ -216,6 +216,7 @@ def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = No
     - data_type (str): The type of data considered.
                        Values accepted are: seq, rna, cna, cna_seq, cna_seq_rna, sv
     - merge_samples (list | None): List of case samples for a given data type from a previous import folder that needs to be merged
+    - discarded_samples (list | None): List of samples and/or donors to remove
     '''
     
     #read mapfile
@@ -264,6 +265,12 @@ def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = No
     # write outputfile if samples exist
     # merge samples from previous import folder if they exist
     samples.extend(merge_samples)
+    
+    # remove samples
+    for i in discarded_samples:
+        if i in samples:
+            samples.remove(i)
+       
     if samples:
         newfile = open(outputfile, 'w')
         L = ['cancer_study_identifier: {0}'.format(project_name),
@@ -549,9 +556,9 @@ def parse_clinical_samples(append_data, merge_import_folder, clinical_sample = '
 
 
 
-def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merge_patient_clinical_info=None):
+def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merge_patient_clinical_info=None, discarded_donors=None):
     '''
-    (str, str, str, list | None) -> None
+    (str, str, str, list | None, list | None) -> None
     
     Write clinical files with minimal clinical information
     
@@ -561,6 +568,7 @@ def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merg
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - centre (str): Genomic centre (eg TGL, OICR)
     - merge_patient_clinical_info (list | None): List with patient clinical information to be merged
+    - discarded_donors (list | None): List of donors to exclude
     '''
     
     # make a list with sample names and libraries
@@ -577,7 +585,14 @@ def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merg
             U.append(record)
     # add clinical information to be merged if it exists
     U.extend(merge_patient_clinical_info)
-        
+    
+
+    # remove donors 
+    if discarded_donors:
+        remove = [i for i in U if i[0] in discarded_donors]
+        for i in remove:
+            U.remove(i)
+              
     T = ['#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
          '#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
          '#STRING\tSTRING\tNUMBER\tSTRING\tSTRING']
@@ -594,9 +609,9 @@ def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merg
 
 
 
-def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sample_info = None, merge_sample_clinical_info = None):
+def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sample_info = None, merge_sample_clinical_info = None, discarded_samples=None):
     '''
-    (str, str, str, str, dict | None, dict | None) -> None
+    (str, str, str, str, dict | None, dict | None, list | None) -> None
     
     Write clinical files with minimal clinical information
     
@@ -607,6 +622,7 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
     - centre (str): Genomic centre (eg TGL, OICR)
     - sample_info (dict | None): Dictionary with patient and sample information. Populates the sample clinical file
     - merge_sample_clinical_info (dict, | None): Dictionary with clinical sample information to be merged 
+    - discarded_samples (list | None): List of samples to exclude
     '''
     
     # make a list with sample names and libraries
@@ -661,7 +677,16 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
     for ID in data:
         assert len(data[ID]) == len(T[0])
     
-
+    # remove samples
+    if discarded_samples:
+        remove = []
+        for i in discarded_samples:
+            for j in data:
+                if i in j:
+                    remove.append(j)
+        for i in remove:
+            del data[i]
+    
     # write sample clinical file    
     newfile = open(outputfile, 'w')
     for i in T:
@@ -706,9 +731,9 @@ def parse_clinical_oncokb(append_data, merge_import_folder, clinical_oncokb = 'o
 
    
 
-def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncokb=None):
+def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncokb=None, discarded_samples=None):
     '''
-    (str, str, str, list | None) -> None
+    (str, str, str, list | None, list | None) -> None
     
     Write clinical file for oncokb-annotator
     
@@ -718,6 +743,7 @@ def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncok
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - cancer_code (str): Cancer code from OncoTree
     - merge_clinical_oncokb (list, None): List of samples from the clinical oncokb file of a previous import folder that needs to be merged
+    - discarded_samples (list | None): List of samples to exclude
     '''
        
     # get library and cancer type from the mapfile
@@ -730,6 +756,12 @@ def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncok
     # add samples to merge if they exist
     if merge_clinical_oncokb:
         L.extend(merge_clinical_oncokb)
+    
+    # remove samples
+    if discarded_samples:
+        remove = [i for i in L if i in discarded_samples]
+        for i in remove:
+            L.remove(i)
     
     if L:
         newfile = open(outputfile, 'w')
@@ -2378,10 +2410,112 @@ def check_fusion_data(fusfile):
         return True
     else:
         return False
+
+
+def check_exclude_option(removed_samples):
+    '''
+    (str) -> None
+    
+    Raise an Error if the file path to the removed file is incorrect when this option is used
+        
+    Parameters
+    ----------
+    - removed_samples (str): Path to the files with samples to be excluded
+    '''
+    
+    if removed_samples:
+        if os.path.isfile(removed_samples) == False:
+            raise ValueError('Provide the path to the file with excluded samples')
     
 
+def parse_excluded_samples(file):
+    '''
+    (str) -> list
+    
+    Returns a list of samples to be excluded from the import folder
+    
+    Parameters
+    ----------
+    - file (str): Path to the file with the samples to exclude
+    '''
+    
+    infile = open(file)
+    samples = infile.read().strip().split('\n')
+    infile.close()
+    
+    return samples
+    
+       
+def map_donors_samples(mapfile, append_data, merge_import_folder):
+    '''
+    (str, bool, str) -> dict
+    
+    Returns a dictionary mapping all donors to their samples 
+    from the current mapping file and a previous import folder if data needs to be merged
+    
+    Parameters
+    ----------
+    - mapfile (str): Path to the current mapping file
+    - append_data (bool): Merge data if True
+    - merge_import_folder (str): Path to a previous import folder
+    '''
+    
+    # read the map file
+    infile = open(mapfile)
+    content = infile.read().rstrip().split('\n')
+    infile.close()
+    
+    
+    # get the cases from the previous import folder if merging folders
+    merge_samples = [get_samples_merge(append_data, merge_import_folder, i) for i in   
+                     ['cases_sequenced.txt', 'cases_rna_seq_mrna.txt', 'cases_cna.txt',
+                      'cases_cnaseq.txt', 'cases_3way_complete.txt', 'cases_sv.txt']] 
+    
+    # collect all samples
+    samples = [i.split(',')[1] for i in content]
+    for i in merge_samples:
+        samples.extend(i)
+    samples = list(set(samples))
+        
+    # map donors to samples
+    D = {}
+    for  i in samples:
+        donor = i.split('_')[:2]
+        if donor not in D:
+            D[donor] = []
+        D[donor].append(i)
+        
+    return D
 
-      
+    
+def exclude_donors(mapfile, append_data, merge_import_folder, removed_samples):
+    '''
+    (str, bool, str, str) -> list
+    
+    Returns a list of donors that need to be excluded because all their corresponding 
+    samples are in the removed samples file
+    
+    Parameters
+    ----------
+    - mapfile (str): Path to the current mapping file
+    - append_data (bool): Merge data if True
+    - merge_import_folder (str): Path to a previous import folder
+    - removed_samples (str): Path to the files with excluded samples
+    '''
+    
+    D = map_donors_samples(mapfile, append_data, merge_import_folder)
+    excluded = parse_excluded_samples(removed_samples)
+    
+    for sample in excluded:
+        for donor in D:
+            if sample in D[donor]:
+                D[donor].removed(sample)
+    # get all the donors that do not have any samples
+    excluded_donors = [i for i in D if len(D[i]) == 0]
+        
+    return excluded_donors
+
+
 
 def make_import_folder(args):
     '''
@@ -2396,6 +2530,7 @@ def make_import_folder(args):
     - clinical (str): Path to the sample clinical file
     - append_data (bool): Create an import folder by merging data from an existing import folder if True
     - merge_import_folder (str): Path to the previous import folder in which data should be merged
+    - removed_samples (str): Path to the files with samples to be excluded
     '''
     
     # parse config file
@@ -2444,6 +2579,16 @@ def make_import_folder(args):
     create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep)
     print('created input directories')
         
+    # get the samples to exclude
+    check_exclude_option(args.removed_samples)
+    if args.removed_samples:
+        excluded_samples = parse_excluded_samples(args.removed_samples)
+        excluded_donors =  exclude_donors(mapfile, args.append_data, args.merge_import_folder, args.removed_samples)
+        print('Excluding {0} donors and {1} samples'.format(len(excluded_donors), len(excluded_samples)))
+    else:
+        print('All specified donors and samples are used.')
+        excluded_samples, excluded_donors = [], []
+        
     # write meta study and clinical files
     write_meta_study(os.path.join(cbiodir, 'meta_study.txt') , study, project_name, description, genome, cancer_code)
     write_meta_clinical(cbiodir, project_name, 'sample')
@@ -2454,37 +2599,61 @@ def make_import_folder(args):
     merge_samples = [get_samples_merge(args.append_data, args.merge_import_folder, i) for i in   
                      ['cases_sequenced.txt', 'cases_rna_seq_mrna.txt', 'cases_cna.txt',
                       'cases_cnaseq.txt', 'cases_3way_complete.txt', 'cases_sv.txt']] 
-    print('wrote cases')
-                     
-    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), project_name, mapfile, 'seq', merge_samples[0])
-    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), project_name, mapfile, 'rna', merge_samples[1])
-    write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, mapfile, 'cna', merge_samples[2])
-    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, mapfile, 'cna_seq', merge_samples[3])
-    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, mapfile, 'cna_seq_rna', merge_samples[4]) 
-    write_cases(os.path.join(casedir, 'cases_sv.txt'), project_name, mapfile, 'sv', merge_samples[5]) 
+                        
+    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), project_name, mapfile, 'seq',
+                merge_samples = merge_samples[0], discarded_samples = excluded_samples)
+    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), project_name, mapfile, 'rna',
+                merge_samples = merge_samples[1], discarded_samples = excluded_samples)
+    write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, mapfile, 'cna',
+                merge_samples = merge_samples[2], discarded_samples = excluded_samples)
+    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, mapfile, 'cna_seq',
+                merge_samples = merge_samples[3], discarded_samples = excluded_samples)
+    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, mapfile, 'cna_seq_rna',
+                merge_samples = merge_samples[4], discarded_samples = excluded_samples)
+    write_cases(os.path.join(casedir, 'cases_sv.txt'), project_name, mapfile, 'sv',
+                merge_samples = merge_samples[5], discarded_samples = excluded_samples) 
     print('wrote cases')
 
+    
     # write patient clinical information
     clinical_outputfile = os.path.join(cbiodir, 'data_clinical_patients.txt')
     # get clinical file from previous import folder if merging
     merge_patient_clinical_info = parse_clinical_patients(args.append_data, args.merge_import_folder, 'data_clinical_patients.txt')
-    write_patient_minimal_clinical_information(clinical_outputfile, mapfile, center, merge_patient_clinical_info)
-                                               
+    write_patient_minimal_clinical_information(clinical_outputfile, mapfile, center,
+                                               merge_patient_clinical_info=merge_patient_clinical_info,
+                                               discarded_donors=excluded_donors)
+        
     # write sample clinical information
     # get clinical sample file from previous import folder if merging
     merge_sample_clinical_info =  parse_clinical_samples(args.append_data, args.merge_import_folder, 'data_clinical_samples.txt')
     # get the user defined sample clinical information
     clinical_info = get_clinical_data(args.clinical) if args.clinical else None
     clinical_outputfile = os.path.join(cbiodir, 'data_clinical_samples.txt')
-    write_sample_minimal_clinical_information(clinical_outputfile, mapfile, center, sample_info = clinical_info, merge_sample_clinical_info = merge_sample_clinical_info)
+    write_sample_minimal_clinical_information(clinical_outputfile, mapfile, center,
+                                              sample_info = clinical_info,
+                                              merge_sample_clinical_info = merge_sample_clinical_info,
+                                              discarded_samples = excluded_samples)
     print('wrote clinical information')
     
+       
     # write clinical input file for oncokb-annotator
     clinical_oncokb = os.path.join(suppdir, 'oncokb_clinical_info.txt')
     merge_clinical_oncokb = parse_clinical_oncokb(args.append_data, args.merge_import_folder, 'oncokb_clinical_info.txt')
-    write_clinical_oncokb(clinical_oncokb, mapfile, cancer_code, merge_clinical_oncokb)
+    write_clinical_oncokb(clinical_oncokb, mapfile, cancer_code,
+                          merge_clinical_oncokb=merge_clinical_oncokb,
+                          discarded_samples=excluded_samples)
     print('wrote oncoKb clinical information') 
-        
+    
+
+
+
+    #### continue here
+    
+
+
+
+
+    
     # link files
     for i in ['maf', 'seg', 'gep', 'fus']:
         link_files(outdir, mapfile, i)
@@ -2719,6 +2888,7 @@ if __name__ == '__main__':
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
     g_parser.add_argument('--append', dest='append_data', action='store_true', help='Create an import folder by merging data from an existing import folder if True')
     g_parser.add_argument('-mid', '--MergeImportDirectory', dest='merge_import_folder', help='Path to the previous import folder in which data should be merged')
+    g_parser.add_argument('-rs', '--RemovedSamples', dest='removed_samples', help='Path to the files with samples to be excluded')
     g_parser.set_defaults(func=make_import_folder)
     
     # import folder to gsi cbioportal instance
