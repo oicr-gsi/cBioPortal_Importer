@@ -2551,13 +2551,183 @@ def remove_samples_from_maf(maffile, discarded_samples):
                 removed += 1
     infile.close()
     
-    # open maffile for writing
-    newfile = open(maffile, 'w')
-    for i in content:
-        newfile.write(i + '\n')
-    newfile.close()        
+    if removed:
+        # open maffile for writing
+        newfile = open(maffile, 'w')
+        for i in content:
+           newfile.write(i + '\n')
+        newfile.close()        
     
     return removed
+
+
+def remove_samples_from_fusion(fusfile, discarded_samples):
+    '''
+    (str, list) -> int
+    
+    Delete fusions from the fusion file for samples in discarded samples
+    and returns the number of removed fusions
+    
+    Parameters
+    ----------
+    - fusfile (str): Path to the concatenated fusion file
+    - discarded_samples (list): List of samples to exclude
+    '''
+    
+    # create a list of data excluding the discarded samples
+    content = []
+    # count the number of fusions removed
+    removed = 0
+    
+    infile = open(fusfile)
+    # add header
+    content.append(infile.readline().rstrip())
+    # parse file content and skip lines containing the discarded samples
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            # keep fusions for samples not in discarded samples
+            if line[0] not in discarded_samples:
+                content.append('\t'.join(line))
+            else:
+                removed += 1
+    infile.close()
+    
+    if removed:
+        # open fusfile for writing
+        newfile = open(fusfile, 'w')
+        for i in content:
+            newfile.write(i + '\n')
+        newfile.close()        
+    
+    return removed
+
+
+
+
+def find_position_discarded_sample(gepfile, discarded_samples):
+    '''
+    (str, list) -> list
+    
+    Returns a list of indices corresponding to the positions of each discarded sample
+    in the header of the gep file in decreasing order
+        
+    Parameters
+    ----------
+    - gepfile (str): Path to the concatenated gep file
+    - discarded_samples (list): List of samples to exclude
+    '''
+    
+    L = []
+    
+    infile = open(gepfile)
+    header = infile.readline().rstrip().split('\t')
+    infile.close()
+    for i in discarded_samples:
+        if i in header:
+            L.append(header.index(i))    
+    # sort the list in decreasing order 
+    L = list(reversed(sorted(L)))
+    
+    return L
+
+
+def remove_samples_from_gepfile(gepfile, discarded_samples):
+    '''
+    (str, list) -> int
+    
+    Delete fusions from the fusion file for samples in discarded samples
+    and returns the number of removed fusions
+    
+    Parameters
+    ----------
+    - fusfile (str): Path to the concatenated fusion file
+    - discarded_samples (list): List of samples to exclude
+    '''
+
+    # get the indices of the discarded samples in the header of the gepfile
+    excluded_positions = find_position_discarded_sample(gepfile, discarded_samples)
+
+    # create a list of data excluding the discarded samples
+    content = []
+    # count the number of genes/transcripts for which data is removed
+    removed = 0    
+    
+    if excluded_positions:
+        infile = open(gepfile)
+        header = infile.readline().rstrip().split('\t')
+        # remove samples from header
+        for i in excluded_positions:
+            header = header[:i] + header[i+1:]
+        # add header
+        content.append('\t'.join(header))
+    
+        # parse file content and skip lines containing the discarded samples
+        for line in infile:
+            line = line.rstrip()
+            if line:
+                line = line.split('\t')
+                # exclude each column (sample) in line
+                for i in excluded_positions:
+                    line = line[:i] + line[i+1:]
+                content.append('\t'.join(line))
+                removed += 1
+        infile.close()    
+            
+        # open fusfile for writing
+        newfile = open(gepfile, 'w')
+        for i in content:
+            newfile.write(i + '\n')
+        newfile.close()        
+    
+    return removed
+
+
+
+def remove_samples_from_segfile(segfile, discarded_samples):
+    '''
+    (str, list) -> int
+    
+    Delete events from the concatenated seg file for samples in discarded samples
+    and returns the number of removed events
+    
+    Parameters
+    ----------
+    - segfile (str): Path to the concatenated segfile
+    - discarded_samples (list): List of samples to exclude
+    '''
+    
+    # create a list of data excluding the discarded samples
+    content = []
+    # count the number of fusions removed
+    removed = 0
+    
+    infile = open(segfile)
+    # add header
+    content.append(infile.readline().rstrip())
+    # parse file content and skip lines containing the discarded samples
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            # keep fusions for samples not in discarded samples
+            if line[0] not in discarded_samples:
+                content.append('\t'.join(line))
+            else:
+                removed += 1
+    infile.close()
+    
+    if removed:
+        # open fusfile for writing
+        newfile = open(segfile, 'w')
+        for i in content:
+            newfile.write(i + '\n')
+        newfile.close()        
+    
+    return removed
+
+
 
 
 
@@ -2750,26 +2920,22 @@ def make_import_folder(args):
         gepfile = ''
     
     
-    
-    
-    #### continue here
-    
-    
     # remove samples from the data files
     if excluded_samples:
         if mutation_file:
             removed_mutations = remove_samples_from_maf(mutation_file, excluded_samples)
-            print('Removed {0} mutations for {1} in mutation file {2}'.format(removed_mutations, len(excluded_samples), mutation_file))
-       
-       
-        
+            print('Removed {0} mutations for {1} samples in mutation file {2}'.format(removed_mutations, len(excluded_samples), mutation_file))
+        if segfile:
+            removed_events = remove_samples_from_segfile(segfile, excluded_samples)
+            print('Removed {0} events for {1} samples in seg file {2}'.format(removed_events, len(excluded_samples), segfile))
+        if fusfile:
+            removed_fusions = remove_samples_from_fusion(fusfile, excluded_samples)
+            print('Removed {0} fusions for {1} samples in fusion file {2}'.format(removed_fusions, len(excluded_samples), fusfile))
+        if gepfile:
+            removed_expression = remove_samples_from_gepfile(gepfile, excluded_samples)
+            print('Removed {0} genes for {1} samples in gep file {2}'.format(removed_expression, len(excluded_samples), gepfile))
     
-    
-    
-    
-    
-    
-    
+           
     # filter maf files and write metadata
     # define maffile, output of MafAnnotator
     if mutation_file:
