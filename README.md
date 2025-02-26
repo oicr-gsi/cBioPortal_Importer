@@ -38,6 +38,11 @@ Example command:
 ```cbio_importer generate -cf /.mounts/labs/gsiprojects/gsi/gsiusers/rjovelin/cbiportal_importer_dev/config_cbioportal_batch2.ini --append -mid /.mounts/labs/gsiprojects/gsi/gsiusers/rjovelin/cbiportal_importer_dev/batch1/out/```
 
 
+Specific samples from the current mapping file or a previous import folder can be excluded using the option ```-rs```.
+This option takes a file listing all the samples that need to be excluded. The samples correspond to the samples from column 2 in the mapping file.
+All the data corresponding to these excluded samples will be discarded when generating the import folder
+
+
 Parameters
 
 | argument | purpose | required/optional                                    |
@@ -46,6 +51,7 @@ Parameters
 | -cl | Path to sample clinical information file   | optional              |
 | --append | Flag to indicate that data will be merged with data from a previous import folder | optional              |
 | -mid | Path to the output directory (outdir in the config) of a previous import folder for which data will be merged   | optional              |
+| -rs | Path to the file with excluded samples  | optional              |
 
 
 
