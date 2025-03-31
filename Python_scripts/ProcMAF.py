@@ -4,6 +4,20 @@ import pandas as pd
 import gc 
 
 def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
+    '''
+    Adds a VAF column to a MAF DataFrame.
+
+    Parameters
+    ----------
+    - maf_df (pd.DataFrame): The MAF DataFrame containing mutation data.
+    - alt_col (str): The name of the column representing the alternate allele count.
+    - dep_col (str): The name of the column representing the depth. 
+    - vaf_header (str): The name for the new column that will hold the VAF values.
+
+    Returns
+    -------
+    - maf_df (pd.DataFrame) : The modified dataframe with the VAF column. 
+    '''
     # print a warning if any values are missing (shouldn't happen), but change them to 0
     if maf_df[alt_col].isnull().any() or maf_df[dep_col].isnull().any():
         print('Warning! Missing values found in one of the count columns')
@@ -27,14 +41,26 @@ def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
     
 
 def procVEP(datafile):
+    '''
+    Processes the input MAF file, adding various computed columns, and applying multiple filters to prepare the data for further analysis.
+
+    Parameters
+    ----------
+    - datafile (str): The file path to the input in tab-separated format.
+
+    Returns
+    -------
+    - df_anno (pd.DataFrame) : The modified dataframe. 
+    '''
+    print("--- reading data ---")
     data = pd.read_csv(datafile, sep="\t")
 
-    #print('--- doing some formatting ---')
+    print('--- doing some formatting ---')
 
     # add vaf columns 
-    #print('add tumor_vaf')
+    print('add tumor_vaf')
     data = addVAFtoMAF(data, 't_alt_count', 't_depth', 'tumor_vaf')
-    #print('add normal_vaf')
+    print('add normal_vaf')
     data = addVAFtoMAF(data, 'n_alt_count', 'n_depth', 'normal_vaf')
 
     # clear memory (important when the mafs are huge with millions and millions of lines)
@@ -43,51 +69,50 @@ def procVEP(datafile):
     gc.collect()
 
     # add oncogenic yes or no columns 
-    #print('add oncogenic status')
+    print('add oncogenic status')
     df_anno['oncogenic_binary'] = df_anno['oncogenic'].apply(lambda x: 'YES' if x in ['Oncogenic', 'Likely Oncogenic'] else 'NO')
 
     # add common_variant yes or no columns
     df_anno['ExAC_common'] = df_anno['FILTER'].apply(lambda x: 'YES' if 'common_variant' in x else 'NO')
 
     # add POPMAX yes or no columns 
-    #print('add population level frequency')
+    print('add population level frequency')
     gnomad_cols = ['gnomAD_AFR_AF', 'gnomAD_AMR_AF', 'gnomAD_ASJ_AF', 'gnomAD_EAS_AF', 'gnomAD_FIN_AF', 'gnomAD_NFE_AF', 'gnomAD_OTH_AF', 'gnomAD_SAS_AF']
     df_anno[gnomad_cols] = df_anno[gnomad_cols].fillna(0)
     df_anno['gnomAD_AF_POPMAX'] = df_anno[gnomad_cols].max(axis=1)
 
     # caller artifact filters 
-    #print('apply filters')
+    print('apply filters')
     df_anno['FILTER'] = df_anno['FILTER'].replace('clustered_events', 'PASS')
     df_anno['FILTER'] = df_anno['FILTER'].replace('common_variant', 'PASS')
-    df_anno['FILTER'] = df_anno['FILTER'].apply(lambda x: 'PASS')
 
     # some specific filter flags should be rescued if oncogenic (i.e. EGFR had issues here)
-    #print("rescue filter flags if oncogenic")
+    print("rescue filter flags if oncogenic")
     df_anno['FILTER'] = df_anno.apply(
         lambda row: 'PASS' if row['oncogenic_binary'] == 'YES' and row['FILTER'] in ['triallelic_site', 'clustered_events;triallelic_site', 'clustered_events;homologous_mapping_event'] else row['FILTER'],
         axis=1
     )
 
     # Artifact Filter
-    #print('artifact filter')
+    print('artifact filter')
     df_anno['TGL_FILTER_ARTIFACT'] = df_anno['FILTER'].apply(lambda x: 'PASS' if x == 'PASS' else 'Artifact')
 
     # ExAC Filter
-    #print('exac filter')
+    print('exac filter')
     df_anno['TGL_FILTER_ExAC'] = df_anno.apply(
         lambda row: 'ExAC_common' if row['ExAC_common'] == 'YES' and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
         axis=1
     )
 
     # gnomAD_AF_POPMAX Filter
-    #print('population frequency filter')
+    print('population frequency filter')
     df_anno['TGL_FILTER_gnomAD'] = df_anno.apply(
         lambda row: 'gnomAD_common' if row['gnomAD_AF_POPMAX'] > 0.001 and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
         axis=1
     )
 
     # VAF Filter
-    #print('VAF Filter')
+    print('VAF Filter')
     df_anno['TGL_FILTER_VAF'] = df_anno.apply(
         lambda row: 'PASS' if row['tumor_vaf'] >= 0.1 or 
         (row['tumor_vaf'] < 0.1 and row['oncogenic_binary'] == 'YES' and 
@@ -97,7 +122,7 @@ def procVEP(datafile):
     )
 
     # Mark filters 
-    #print('Mark filters')
+    print('Mark filters')
     df_anno['TGL_FILTER_VERDICT'] = df_anno.apply(
         lambda row: 'PASS' if row['TGL_FILTER_ARTIFACT'] == 'PASS' and 
                           row['TGL_FILTER_ExAC'] == 'PASS' and 
