@@ -102,10 +102,11 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
 
     # subset if gene list is given
     if genelist is not None:
-        keep_genes = [line.strip() for line in open(genelist)]
+        with open(genelist, 'r') as file:
+            keep_genes = [line.strip() for line in file]
         df_cna = df_cna.loc[df_cna.index.isin(keep_genes)]
         df_cna_thresh = df_cna_thresh.loc[df_cna_thresh.index.isin(keep_genes)]
-    
+      
     return segData, df_cna, df_cna_thresh
 
 
@@ -128,7 +129,9 @@ if __name__ == "__main__":
     parser.add_argument(
         'genelist',
         type=str,
-        help='Path to a file with list of Hugo Symbols to report in the final results.'
+        nargs='?',
+        default=None,
+        help='(Optional) Path to a file with list of Hugo Symbols to report in the final results.'
     )
     parser.add_argument(
         'oncolist',
