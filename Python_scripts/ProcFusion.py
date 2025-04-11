@@ -5,12 +5,10 @@ import pandas as pd
 def split_column_take_max(df, columns):
     '''
     Splits columns by ';' and takes the maximum value from a list of columns
-
     Parameters
     ----------
     - df (pd.DataFrame) : The input data that contains the columns to be processed
     - columns (list) : A list of columns names (str) to be processed
-
     Returns
     -------
     - df (pd.DataFrame) : The modified dataframe 
@@ -31,13 +29,11 @@ def split_column_take_max(df, columns):
 def preProcFus(datafile, readfilt, entrfile):
     '''
     Preprocesses the input data and formats it for CBioPortal output. 
-
     Parameters
     -----------
     - datafile (str) : Path to the input fusion data file
     - readfilt (int) : Minimum number of reads for fusion calls
     - entrfilw (str) : Path to the Entrez gene ID file
-        
     Returns
     --------
     - df_cbio (pd.DataFrame) : Processed and formatted data

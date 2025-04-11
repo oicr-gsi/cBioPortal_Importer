@@ -11,7 +11,6 @@ cntools = importr('CNTools')
 def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     '''
     Processes CNA data by applying thresholds and performing gene-level segmentation.
-
     Parameters
     ----------
     - segfile (str) : Path to the input concatenated segmentation file from Sequenza
@@ -22,7 +21,6 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     - hmz (float) : Threshold for homozygous deletion in CNA data
     - oncolist (str) : Path to a tab-delimited file containing the list of cancer genes
     - genelist (str or None) : (Optional) Path to a file containing a list of Hugo Symbols to filter the genes, or None if no filtering is required
-
     Returns
     -------
     - segData (pd.DataFrame) : Dataframe containing the processed segmentation data
@@ -104,6 +102,7 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     if genelist is not None:
         with open(genelist, 'r') as file:
             keep_genes = [line.strip() for line in file]
+            
         df_cna = df_cna.loc[df_cna.index.isin(keep_genes)]
         df_cna_thresh = df_cna_thresh.loc[df_cna_thresh.index.isin(keep_genes)]
       

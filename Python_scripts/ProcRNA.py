@@ -4,6 +4,15 @@ import pandas as pd
 from scipy.stats import zscore
 
 def readGep(gepfile):
+    '''
+    Reads in a sample study file and returns a list of sample names or IDs.
+    Parameters
+    ----------
+    - gepfile (str): Path to the sample study file.
+    Returns
+    -------
+    - study_samples (list): List of sample names or IDs.
+    '''
     study_samples = []
     with open(gepfile, 'r') as file:
         study_samples = [line.strip() for line in file]
@@ -12,6 +21,17 @@ def readGep(gepfile):
 
 # preprocess function
 def preProcRNA(fpkmfile, enscon, genelist=None):
+    '''
+    Preprocesses RNA expression data by merging with gene symbol annotations, optionally subsetting by a gene list.
+    Parameters
+    ----------
+    - fpkmfile (str): Path to the input concatenated FPKM data from RSEM workflow.
+    - enscon (str): Path to a tab-delimited file with ENSEMBLE gene ID and Hugo_Symbol.
+    - genelist (str, optional): Path to a file with list of Hugo Symbols to report in the final results. Default is None.
+    Returns
+    -------
+    - df (pd.DataFrame): Preprocessed DataFrame with gene expression data.
+    '''
     # check if genelist is None when preProcRNA.py is called by pycbio.py and genelist is omitted
     if genelist == "None":
         genelist = None 
@@ -32,7 +52,6 @@ def preProcRNA(fpkmfile, enscon, genelist=None):
     df = df[~df.duplicated(subset=[df.columns[0]])]
 
     df.set_index("Hugo_Symbol", inplace=True)
-    df.drop(df.columns[0], axis=1, inplace=True)
 
     # subset if gene list is given
     if genelist is not None:
@@ -46,8 +65,17 @@ def preProcRNA(fpkmfile, enscon, genelist=None):
 
 # simple zscore function
 def compZ(df):
+    '''
+    Computes row-wise z-scores for a given DataFrame and fills NaN values with zero.
+    Parameters
+    ----------
+    - df (pd.DataFrame): Input DataFrame with gene expression data.
+    Returns
+    -------
+    - df_zscore (pd.DataFrame): DataFrame with z-scores for each gene.
+    '''
     # scale row-wise
-    df_zscore = df.apply(zscore, axis=1)
+    df_zscore = df.apply(lambda x: (x - x.mean()) / x.std(), axis=1)
     df_zscore = df_zscore.fillna(0)
 
     return df_zscore
@@ -105,8 +133,7 @@ if __name__ == "__main__":
     print('getting STUDY-level data')
 
     # subset data to STUDY level data for cbioportal
-    col = [col for col in study_samples if col in df.columns]
-    df_study = df[col]
+    df_study = df[study_samples]
 
     # write the raw STUDY data
     df_study.to_csv(os.path.join(cbiodir, "data_expression.txt"), sep="\t", header=True, index=True)

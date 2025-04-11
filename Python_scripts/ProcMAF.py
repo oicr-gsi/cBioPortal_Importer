@@ -6,14 +6,12 @@ import gc
 def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
     '''
     Adds a VAF column to a MAF DataFrame.
-
     Parameters
     ----------
     - maf_df (pd.DataFrame): The MAF DataFrame containing mutation data.
     - alt_col (str): The name of the column representing the alternate allele count.
     - dep_col (str): The name of the column representing the depth. 
     - vaf_header (str): The name for the new column that will hold the VAF values.
-
     Returns
     -------
     - maf_df (pd.DataFrame) : The modified dataframe with the VAF column. 
@@ -43,11 +41,9 @@ def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
 def procVEP(datafile):
     '''
     Processes the input MAF file, adding various computed columns, and applying multiple filters to prepare the data for further analysis.
-
     Parameters
     ----------
     - datafile (str): The file path to the input in tab-separated format.
-
     Returns
     -------
     - df_anno (pd.DataFrame) : The modified dataframe. 
