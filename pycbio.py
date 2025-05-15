@@ -1832,6 +1832,12 @@ def convert_fusion_to_sv(fusion_file, sv_file):
                     status = d['status']
                 elif d['hugo'] == Site2_Hugo_Symbol:
                     Site2_Entrez_Gene_Id = d['entrez']            
+                    center = d['center']
+                    dna = d['dna']
+                    rna = d['rna']
+                    method = d['method']
+                    frame = d['frame']
+                    status = d['status']
                 if not Site2_Hugo_Symbol:
                     Site2_Entrez_Gene_Id = ''
             
