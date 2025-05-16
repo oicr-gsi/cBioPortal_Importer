@@ -14,6 +14,7 @@ import shutil
 import gzip
 import sys
 import uuid
+import numpy as np
 
 
 
@@ -53,9 +54,115 @@ def extract_files_from_map(mapfile, data_type):
         # get the fusion files
         j = 5
     
-    files = [i[j] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
+    files = [i[j] for i in content if i[j].upper() != 'NA']
     return files
 
+
+def extract_purple_ploidy_purity(purple_purity_file):
+    '''
+    (str) -> (float, float)
+    
+    Returns a tuple with purity and ploidy extracted from file .purple.purity.tsv
+ 
+    Parameters
+    ----------
+    - purple_purity_file (str): Path to the Purple .purple.purity.tsv file
+    '''
+    
+    infile = open(purple_purity_file)
+    header = infile.readline().rstrip().split('\t')
+    content = infile.readline().rstrip().split('\t')
+    infile.close()
+    
+    purity = float(content[header.index('purity')])
+    ploidy = float(content[header.index('ploidy')])
+
+    return purity, ploidy
+    
+
+def convert_purple_to_seg(somatic_file, purity, ploidy, sample_name):
+    '''
+    (str, str) -> list
+    
+    Returns a list of fields extracted from the purple somatic file
+    corresponding to the sequenza segmentation output file 
+    
+    Fields are mapped and renamed as:
+    chromosome -> chrom
+    start -> loc.start
+    end -> loc.end 
+    bafCount -> num.mark
+    copyNumber -> seg.mean adjusted with purity and ploidy  
+    
+    Parameters
+    ----------
+    - somatic_file (str): Path to the purple "purple.cnv.somatic.tsv" file
+    - sample_name (str): Name of the sample
+    - purity (float): Purity estimated from purple
+    - ploidy (float): Ploidy estimated from purple
+    '''
+    
+    L = [['chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']]
+    
+    infile = open(somatic_file)
+    header = infile.readline().rstrip().split('\t')
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            L.append([sample_name, line[header.index('chromosome')],
+                   line[header.index('start')],
+                   line[header.index('end')],
+                   line[header.index('bafCount')]])
+            # compute seg.mean       
+            copyNumber = float(line[header.index('copyNumber')])
+            adjusted_copy_number = np.log2(1 + (purity *(copyNumber - ploidy)/ploidy))
+            L.append(str(adjusted_copy_number))
+    infile.close()
+    
+    return L
+
+
+def generate_purple_segmentation(somatic_file, purple_purity_file, sample_name, outputfile):
+    '''
+    (str, str, str) -> None
+    
+    Convert the purple somatic file to a segmentation file and write to outputfile
+    
+    Parameters
+    ----------
+    - somatic_file (str): Path to the purple "purple.cnv.somatic.tsv" file
+    - purple_purity_file (str): Path to the Purple .purple.purity.tsv file
+    - sample_name (str): Name of the sample
+    - outputfile (str): Path to the outputfile
+    '''
+
+    purity, ploidy = extract_purple_ploidy_purity(purple_purity_file)
+    
+    L = convert_purple_to_seg(somatic_file, purity, ploidy, sample_name)
+    newfile = open(outputfile, 'w')
+    for i in L:
+        newfile.write('\t'.join(i) + '\n')
+    newfile.close()
+
+
+def is_sequenza_segmentation(segfile):
+    '''
+    (str) -> bool
+    
+    Returns True if the segfile is the segmentation file from sequenza
+    
+    Parameters
+    ----------
+    - segfile (str):Path to a segmentation file
+    '''
+    
+    infile = open(segfile)
+    header = infile.readline().rstrip().split('\t')
+    infile.close()
+    
+    return header == ['ID', 'chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']
+    
 
 def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep):
     '''
@@ -813,16 +920,29 @@ def link_files(outdir, mapfile, data_type):
         j = 5
         extension = '.fus'
         
-    samples = [i[1] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
-    files = [i[j] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
+    samples = [i[1] for i in content if i[j].upper() != 'NA']
+    files = [i[j] for i in content if i[j].upper() != 'NA']
     assert len(files) == len(samples)
     
     if files:
-        for i in range(len(files)):
-            folder = os.path.join(outdir, '{0}dir'.format(data_type))
-            os.makedirs(folder, exist_ok=True)
-            target = os.path.join(folder,  samples[i] + extension)
-            subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)         
+       for i in range(len(files)):
+           folder = os.path.join(outdir, '{0}dir'.format(data_type))
+           os.makedirs(folder, exist_ok=True)
+           target = os.path.join(folder,  samples[i] + extension)
+           # check if file is sequenza or purple output
+           if data_type == 'seg':
+               # link sequenza file
+               if os.path.isfile(files[i]) and is_sequenza_segmentation(files[i]):
+                   subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)
+               else:
+                   # get the somatic and ploidy file from purple
+                   assert ';' in files[i]
+                   somatic_file, purple_purity_file = files[i].split(';')
+                   # convert purle somatic file to segmentation file
+                   generate_purple_segmentation(somatic_file, purple_purity_file, samples[i], target)
+           else:
+               subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)        
+                   
     else:
         print('Cannot link {0} files. No files exist in mapping file {1}'.format(data_type, mapfile))
 

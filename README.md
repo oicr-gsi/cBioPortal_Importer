@@ -14,6 +14,12 @@ The data should be organized in a comma-separated map.csv file with the followin
 
 `patient_id,sample_id,maf_file.maf.gz,seg_file.seg,rsem.genes.results,mavis.tab`
 
+It is also possible to use output from the purple workflow instead of sequenza.
+In that case, both the purple CNV and purity files whould be specified and separated with a semi-colon:
+
+`patient_id,sample_id,maf_file.maf.gz,purple.cnv.somatic.tsv;purple.purity.tsv,rsem.genes.results,mavis.tab`
+
+
 Options, including path the output directory, path to the mapping file and filters can be specified in the config file
 
 Generate the import folder with the following command: 
