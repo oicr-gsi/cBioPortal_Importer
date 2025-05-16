@@ -13,7 +13,6 @@ import os
 import shutil
 import gzip
 import sys
-import uuid
 import numpy as np
 import json
 import glob
@@ -3157,60 +3156,6 @@ def make_import_folder(args):
     print('Success! Data in the cbioportal import folder is ready for upload.')
 
 
-
-def import_cbioportal_project(args):
-    '''
-    (list) -> None
-    
-    Import a study into the GSI cBioPortal instance
-    
-    Parameters
-    ----------
-    - folder (str): Path to the cbioportal import folder with data to upload
-    - key (str): Path to the file with cbioportal authentification key
-    - user (str): User name. Default is ubuntu
-    '''
-
-    
-    if args.key:
-        key = '-i ' + args.key
-    else:
-        key = args.key
-    
-    base_folder = os.path.basename(os.path.abspath(args.folder))
-    
-    # create directory on cbioportal server 
-    copying_message = 'Copying import folder to GSI cBioPortal instance' 
-    print(copying_message + '\n' + len(copying_message) * '=' + '\n\n')
-        
-    unique_id = (uuid.uuid1()).int
-    new_dir = "~/gsi/{0}.{1}".format(base_folder, unique_id)
-    exit_code =  subprocess.call("ssh {0} ubuntu@cbio ' mkdir {1}'".format(key, new_dir), shell=True)
-    if exit_code:
-        sys.exit('Could not create folder on GSI cBioPortal instance')
-    else:
-        print('Created folder {0} on GSI cBioPortal instance'.format(os.path.basename(new_dir)))
-    
-    # copy data over to directory on cbioportal
-    import_files = [os.path.join(args.folder, i) for i in os.listdir(args.folder)]
-    for i in import_files:
-        exit_code  = subprocess.call('scp -r {0} {1} ubuntu@cbio:{2}'.format(key, i, new_dir), shell=True)
-        if exit_code:
-            sys.exit('Could not copy file {0} to folder {1} on GSI cBioPortal instance'.format(os.path.basename(i), new_dir))
-        else:
-            print('copied file {0} to {1} on GSI cBioPortal instance'.format(os.path.basename(i), new_dir))
-        
-    import_message = 'Importing study to GSI cBioPortal instance'
-    print(import_message + '\n' + len(import_message) * '=' + '\n\n')
-    
-    # Import study with import_study.sh. Precondition. cbioportal is installed with docker image
-    cmd = "ssh {0} -t ubuntu@cbio ' /home/ubuntu/import_study_modified.sh {1} {2}'".format(key, new_dir, args.genome)
-    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8').rstrip()
-    
-    print(output + '\n\n\n')
-
-
-
 def generate_mapfile(args):
     '''
     (str, str)
@@ -3293,14 +3238,6 @@ if __name__ == '__main__':
     g_parser.add_argument('-rs', '--RemovedSamples', dest='removed_samples', help='Path to the files with samples to be excluded')
     g_parser.set_defaults(func=make_import_folder)
     
-    # import folder to gsi cbioportal instance
-    i_parser = subparsers.add_parser('import', help="Import cbioportal folder to GSI cBioPortal instance")
-    i_parser.add_argument('-f', '--folder', dest='folder', help='Path to cbioportal import folder', required = True)
-    i_parser.add_argument("-k", "--key", dest='key', default = '', help="Path to the cBioPortal Key")
-    i_parser.add_argument("-u", "--user", dest= 'user', default='ubuntu', help="The linux distribution. Default is ubuntu")
-    i_parser.add_argument("-g", "--genome", dest= 'genome', choices=['hg19', 'hg38'], help = 'Reference genome, hg19 or hg38', required=True)
-    i_parser.set_defaults(func=import_cbioportal_project)
- 
     # generate import folder
     m_parser = subparsers.add_parser('map', help="Generate map file")
     m_parser.add_argument('-o', '--outdir', dest='outdir', help='Path to the output directory', required = True)
