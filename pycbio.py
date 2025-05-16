@@ -17,7 +17,7 @@ import uuid
 import numpy as np
 import json
 import glob
-
+import zipfile
 
 
 def extract_files_from_map(mapfile, data_type):
@@ -54,7 +54,7 @@ def extract_files_from_map(mapfile, data_type):
         # get the fusion files
         j = 5
     
-    files = [i[j] for i in content if i[j].upper() != 'NA']
+    files = [i[j] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
     return files
 
 
@@ -920,8 +920,8 @@ def link_files(outdir, mapfile, data_type):
         j = 5
         extension = '.fus'
         
-    samples = [i[1] for i in content if i[j].upper() != 'NA']
-    files = [i[j] for i in content if i[j].upper() != 'NA']
+    samples = [i[1] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
+    files = [i[j] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
     assert len(files) == len(samples)
     
     if files:
@@ -929,20 +929,7 @@ def link_files(outdir, mapfile, data_type):
            folder = os.path.join(outdir, '{0}dir'.format(data_type))
            os.makedirs(folder, exist_ok=True)
            target = os.path.join(folder,  samples[i] + extension)
-           # check if file is sequenza or purple output
-           if data_type == 'seg':
-               # link sequenza file
-               if os.path.isfile(files[i]) and is_sequenza_segmentation(files[i]):
-                   subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)
-               else:
-                   # get the somatic and ploidy file from purple
-                   assert ';' in files[i]
-                   somatic_file, purple_purity_file = files[i].split(';')
-                   # convert purle somatic file to segmentation file
-                   generate_purple_segmentation(somatic_file, purple_purity_file, samples[i], target)
-           else:
-               subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)        
-                   
+           os.symlink(files[i], target)
     else:
         print('Cannot link {0} files. No files exist in mapping file {1}'.format(data_type, mapfile))
 
@@ -3255,7 +3242,8 @@ def generate_mapfile(args):
                     sampledir = os.path.join(donordir, sample)
                     os.makedirs(sampledir, exist_ok=True)
                     if os.path.isfile(data[donor][sample][workflow]):
-                        subprocess.call('unzip {0} -d {1}'.format(data[donor][sample][workflow], sampledir), shell=True)
+                        with zipfile.ZipFile(data[donor][sample][workflow], 'r') as zipref:
+                            zipref.extractall(sampledir)
                     # get the seg file of interest
                     segfile = glob.glob(sampledir +'/gammas/{0}/*.seg'.format(args.gamma))
                     assert len(segfile) == 1
