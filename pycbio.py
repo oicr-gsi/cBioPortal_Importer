@@ -15,9 +15,9 @@ import gzip
 import sys
 import uuid
 import numpy as np
-
-
-
+import json
+import glob
+import zipfile
 
 
 def extract_files_from_map(mapfile, data_type):
@@ -54,7 +54,7 @@ def extract_files_from_map(mapfile, data_type):
         # get the fusion files
         j = 5
     
-    files = [i[j] for i in content if i[j].upper() != 'NA']
+    files = [i[j] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
     return files
 
 
@@ -920,8 +920,8 @@ def link_files(outdir, mapfile, data_type):
         j = 5
         extension = '.fus'
         
-    samples = [i[1] for i in content if i[j].upper() != 'NA']
-    files = [i[j] for i in content if i[j].upper() != 'NA']
+    samples = [i[1] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
+    files = [i[j] for i in content if i[j].upper() != 'NA' and os.path.isfile(i[j])]
     assert len(files) == len(samples)
     
     if files:
@@ -929,20 +929,7 @@ def link_files(outdir, mapfile, data_type):
            folder = os.path.join(outdir, '{0}dir'.format(data_type))
            os.makedirs(folder, exist_ok=True)
            target = os.path.join(folder,  samples[i] + extension)
-           # check if file is sequenza or purple output
-           if data_type == 'seg':
-               # link sequenza file
-               if os.path.isfile(files[i]) and is_sequenza_segmentation(files[i]):
-                   subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)
-               else:
-                   # get the somatic and ploidy file from purple
-                   assert ';' in files[i]
-                   somatic_file, purple_purity_file = files[i].split(';')
-                   # convert purle somatic file to segmentation file
-                   generate_purple_segmentation(somatic_file, purple_purity_file, samples[i], target)
-           else:
-               subprocess.call('ln -s {0} {1}'.format(files[i], target), shell=True)        
-                   
+           os.symlink(files[i], target)
     else:
         print('Cannot link {0} files. No files exist in mapping file {1}'.format(data_type, mapfile))
 
@@ -3223,6 +3210,73 @@ def import_cbioportal_project(args):
     print(output + '\n\n\n')
 
 
+
+def generate_mapfile(args):
+    '''
+    (str, str)
+    
+    Generates a map file with data required for creating the cbioportal import folder
+       
+    Parameters
+    ----------
+    - outdir (str): Path to the output directory
+    - input_data (str): Path to the json file with input data
+    - gamma (str): Gamma value of the sequenza workflow. Default is 500
+    '''
+    
+    infile = open(args.input_data)
+    data = json.load(infile)
+    infile.close()
+    
+    mapfile = os.path.join(args.outdir, 'map.csv')
+    newfile = open(mapfile, 'w')
+        
+    for donor in data:
+        for sample in data[donor]:
+            L = [donor,sample,'','','','']
+            for workflow in data[donor][sample]:
+                if 'sequenza' in workflow.lower():
+                    # create a sequenza directory
+                    sequenzadir =  os.path.join(args.outdir, 'sequenza')
+                    donordir = os.path.join(sequenzadir, donor)
+                    sampledir = os.path.join(donordir, sample)
+                    os.makedirs(sampledir, exist_ok=True)
+                    if os.path.isfile(data[donor][sample][workflow]):
+                        with zipfile.ZipFile(data[donor][sample][workflow], 'r') as zipref:
+                            zipref.extractall(sampledir)
+                    # get the seg file of interest
+                    segfile = glob.glob(sampledir +'/gammas/{0}/*.seg'.format(args.gamma))
+                    assert len(segfile) == 1
+                    segfile = segfile[0]
+                    assert os.path.isfile(segfile)
+                    L[2] = segfile       
+                elif 'purple' in workflow.lower():
+                    # create a purple directory
+                    purpledir =  os.path.join(args.outdir, 'purple')
+                    donordir = os.path.join(purpledir, donor)
+                    sampledir = os.path.join(donordir, sample)
+                    os.makedirs(sampledir, exist_ok=True)
+                    #get the cnv and purity files
+                    cnv_file = data[donor][sample][workflow]['cnv']
+                    purity_file = data[donor][sample][workflow]['purity']
+                    # generate segmentation file from purple
+                    outputfile = os.path.join(sampledir, '{0}.purple.seg'.format(sample))
+                    generate_purple_segmentation(cnv_file, purity_file, sample, outputfile)
+                    L[2] = outputfile
+                elif 'varianteffectpredictor' in workflow.lower():
+                    L[3] = data[donor][sample][workflow]
+                elif 'rsem' in workflow.lower():
+                    L[4] = data[donor][sample][workflow]
+                elif 'mavis' in workflow.lower():
+                    L[5] = data[donor][sample][workflow]
+            assert all(L)  
+            newfile.write(','.join(L) + '\n')
+
+    newfile.close()
+ 
+
+
+
 if __name__ == '__main__':
 
     # create parser
@@ -3247,6 +3301,13 @@ if __name__ == '__main__':
     i_parser.add_argument("-g", "--genome", dest= 'genome', choices=['hg19', 'hg38'], help = 'Reference genome, hg19 or hg38', required=True)
     i_parser.set_defaults(func=import_cbioportal_project)
  
+    # generate import folder
+    m_parser = subparsers.add_parser('map', help="Generate map file")
+    m_parser.add_argument('-o', '--outdir', dest='outdir', help='Path to the output directory', required = True)
+    m_parser.add_argument('-i', '--input_data', dest='input_data', help='Path to the json file with input data', required = True)
+    m_parser.add_argument('-g', '--gamma', dest='gamma', default='500', help='Gamma value of the sequenza output. Default is 500')
+    m_parser.set_defaults(func=generate_mapfile)
+    
     # get arguments from the command line
     args = parser.parse_args()
     # pass the args to the default function
