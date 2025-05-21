@@ -64,7 +64,7 @@ def preProcFus(datafile, readfilt, entrfile):
     data['gene2_aliases'] = data['gene2_aliases'].fillna('')
 
     data['fusion_tuples'] = data.apply(
-    lambda row: '-'.join(sorted([x for x in [row['gene1_aliases'], row['gene2_aliases']] if x])), axis=1)
+    lambda row: '-'.join(sorted([str(x) if x else 'None' for x in [row['gene1_aliases'], row['gene2_aliases']]])), axis=1)
 
     # add index which is sample, tuple
     data['index'] = data['Sample'] + data['fusion_tuples']
