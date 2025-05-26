@@ -18,6 +18,12 @@ import json
 import glob
 import zipfile
 import pandas as pd 
+from rpy2 import robjects 
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.packages import importr
+
+pandas2ri.activate()
+cntools = importr('CNTools')
 
 
 
@@ -277,6 +283,110 @@ def preProcFus(datafile, readfilt, entrfile):
     df_cbio = df_cbio.dropna()
 
     return df_cbio
+
+
+
+def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
+    '''
+    Processes CNA data by applying thresholds and performing gene-level segmentation.
+    Parameters
+    ----------
+    - segfile (str) : Path to the input concatenated segmentation file from Sequenza
+    - genebed (str) : Path to a tab-delimited bed file defining the genomic positions of canonical genes
+    - gain (float) : Threshold for gains in CNA data
+    - amp (float) : Threshold for amplification in CNA data
+    - htz (float) : Threshold for heterozygous deletion in CNA data
+    - hmz (float) : Threshold for homozygous deletion in CNA data
+    - oncolist (str) : Path to a tab-delimited file containing the list of cancer genes
+    - genelist (str or None) : (Optional) Path to a file containing a list of Hugo Symbols to filter the genes, or None if no filtering is required
+    Returns
+    -------
+    - segData (pd.DataFrame) : Dataframe containing the processed segmentation data
+    - df_cna (pd.DataFrame) : Dataframe with gene-level log2 copy number alterations
+    - df_cna_thresh (pd.DataFrame) : Dataframe with thresholded CNA values (5-state matrix)
+    '''
+    # check if genelist is None when preProcCNA.py is called by pycbio.py and genelist is omitted
+    if genelist:
+        print('genelist is used during CNA processing')
+    else:
+        print('genelist is not used during CNA processing')
+        
+    
+    # read oncogenes
+    oncogenes = pd.read_csv(oncolist, sep='\t')
+
+    # small fix segmentation data
+    segData = pd.read_csv(segfile, sep='\t')
+    segData['chrom'] = segData['chrom'].str.replace('chr', '')
+
+    # convert pandas dataframe to R dataframe 
+    segData_r = pandas2ri.py2rpy(segData)
+
+    # set thresholds
+    print('setting thresholds')
+    gain = float(gain)
+    amp = float(amp)
+    htz = float(htz)
+    hmz = float(hmz)
+
+    # get the gene info
+    print('getting gene info')
+    geneInfo = pd.read_csv(genebed, sep='\t')
+
+    # convert pandas dataframe to R dataframe 
+    geneInfo_r = pandas2ri.py2rpy(geneInfo)
+
+    # make CN matrix gene level
+    print('converting seg')
+    cnseg = cntools.CNSeg(segData_r)
+    print('get segmentation by gene')
+    rdByGene = cntools.getRS(cnseg, by='gene', imput=False, XY=False, geneMap=geneInfo_r, what='median', mapChrom='chrom', mapStart='start', mapEnd='end')
+    print('get reduced segmentation data')
+    reducedseg_df = cntools.rs(rdByGene)
+
+    # convert data from R back to Py
+    reducedseg = pandas2ri.rpy2py(reducedseg_df)
+
+    # some reformatting and return log2cna data
+    df_cna = reducedseg.iloc[:, [4] + list(range(5, reducedseg.shape[1]))]
+    df_cna = df_cna.drop_duplicates(subset=[df_cna.columns[0]])
+    df_cna.columns = ['Hugo_Symbol'] + list(df_cna.columns[1:])
+
+    # set thresholds and return 5-state matrix
+    print('thresholding cnas')
+    df_cna_thresh = df_cna.copy()
+    df_cna_thresh.iloc[:, 1:] = df_cna_thresh.iloc[:, 1:].apply(pd.to_numeric)
+
+    # threshold data
+    for col in df_cna_thresh.columns[1:]:
+        df_cna_thresh[col] = df_cna_thresh[col].apply(lambda x: 2 if x > amp
+                                                else (-2 if x < hmz
+                                                      else (1 if gain < x <= amp
+                                                            else (-1 if hmz <= x < htz
+                                                                  else 0)
+                                                        )
+                                                    )
+                                                )
+    
+    # fix rownames of log2cna data
+    df_cna.set_index('Hugo_Symbol', inplace=True)
+    df_cna = df_cna.round(4)
+    df_cna_thresh.set_index(df_cna_thresh.columns[0], inplace=True)
+
+    # subset of oncoKB genes
+    df_cna_thresh_onco = df_cna_thresh.loc[df_cna_thresh.index.isin(oncogenes.index)]
+
+    # subset if gene list is given
+    if genelist is not None:
+        with open(genelist, 'r') as file:
+            keep_genes = [line.strip() for line in file]
+            
+        df_cna = df_cna.loc[df_cna.index.isin(keep_genes)]
+        df_cna_thresh = df_cna_thresh.loc[df_cna_thresh.index.isin(keep_genes)]
+      
+    return segData, df_cna, df_cna_thresh
+
+
 
 
 def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep):
@@ -1821,37 +1931,6 @@ def remove_indels(maffile, outputfile):
     return total, kept                
 
 
-def process_cna(segfile, genebed, oncolist, gain, amp, htz, hmz, ProcCNA, outdir, genelist):
-    '''
-    (str, str, str, int, int, int, int, str, str, str | None) -> None
-    
-    Process segmentation data to R script ProcCNA.r to generate data files data_segments.txt,
-    data_log2CNA.txt, data_CNA.txt and data_CNA_short.txt
-
-    Parameters
-    ----------
-    - segfile (str): Path to the concatenated segmentation file
-    - genebed (str): Path to Tab-delimited 5 column bed file which defines the genomic positions of the canonical genes
-    - oncolist (str): Path to list of cancer genes
-    - gain (float): Threshold for CNA gain     
-    - amp (float): Threshold for CNA amplification        
-    - htz (float): Threshold for heterozygous deletion
-    - hmz (float): Threshold for homozygoys deletion
-    - ProcCNA (str): Path to the R script for CNA processing
-    - outdir (str): - outdir (str): Path to the output directory where mafdir, sgedir, fusdir and gepdir folders are located
-    - genelist (str | None): Path to list of Hugo Symbols. (Optional)
-    '''    
-
-    cmd = 'Rscript {0} {1} {2} {3} {4} {5} {6} {7} {8} {9}'.format(ProcCNA, segfile, genebed, genelist, oncolist, gain, amp, htz, hmz, outdir)
-    print(cmd)
-    
-    if os.path.isfile(ProcCNA):
-        exit_code = subprocess.call(cmd, shell=True)
-        if exit_code:
-            sys.exit('Could not process CNAs.')
-    else:
-        raise FileNotFoundError('Cannot find R script path {}'.format(ProcCNA))
-       
         
 def process_rna(gepfile, enscon, genelist, ProcRNA, outdir):
     '''
@@ -2185,11 +2264,11 @@ def check_configuration(config):
         raise ValueError('ERROR. Missing sections {0} from config'.format(', '.join(missing_sections)))
         
     # check paths from resources
-    expected_resources = ['procmaf', 'proccna', 'procrna', 'procfusion', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
+    expected_resources = ['procmaf', 'procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
     missing_resources = [i for i in expected_resources if i not in list(config['Resources'].keys())]
     if missing_resources:
         raise ValueError('ERROR. Missing resources: {0}'.format(', '.join(missing_resources)))
-    invalid_resource_files = [i for i in ['procmaf', 'proccna', 'procrna', 'procfusion', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist'] if config['Resources'][i] and os.path.isfile(config['Resources'][i]) == False]
+    invalid_resource_files = [i for i in ['procmaf', 'procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist'] if config['Resources'][i] and os.path.isfile(config['Resources'][i]) == False]
     if invalid_resource_files:
         raise ValueError('ERROR. Provide valid path for {0}'.format(', '.join(invalid_resource_files)))
     
@@ -2258,10 +2337,10 @@ def extract_resources_from_config(config):
     - config (configparser.ConfigParser): Config file parsed with configparser
     '''
     
-    resources = ['procmaf', 'proccna', 'procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
+    resources = ['procmaf', 'procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
     L = [config['Resources'][i] for i in resources]
-    ProcMAF, ProcCNA, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = L
-    return ProcMAF, ProcCNA, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist
+    ProcMAF, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = L
+    return ProcMAF, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist
     
 
 def extract_options_from_config(config):
@@ -2983,7 +3062,7 @@ def make_import_folder(args):
     print('read and checked config')
     
     # extract variables from config
-    ProcMAF, ProcCNA, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
+    ProcMAF, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
     mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
@@ -3223,9 +3302,20 @@ def make_import_folder(args):
         print('wrote CNA metadata files')
         if genelist:
             print('Restricting CNAs to the list of genes provided in {0}'.format(genelist))
-        # generate data files
-        process_cna(segfile, genebed, oncolist, gain, amplification, heterozygous_deletion, homozygous_deletion, ProcCNA, outdir, genelist)
-        print('wrote CNA data files')
+          
+        # function returns list of 3 objects
+        print('Processing CNA data from {0}'.format(segfile))
+        segData, df_cna, df_cna_thresh = preProcCNA(segfile, genebed, gain, amplification, heterozygous_deletion, homozygous_deletion, oncolist, genelist)
+        # write cbio files
+        print('writing seg file')
+        segData.to_csv(os.path.join(cbiodir, 'data_segments.txt'), sep='\t', index=False)
+        df_cna.to_csv(os.path.join(cbiodir, 'data_log2CNA.txt'), sep='\t', index=True)
+        df_cna_thresh.to_csv(os.path.join(cbiodir, 'data_CNA.txt'), sep='\t', index=True)
+        # write the truncated data_CNA file (remove genes which are all zero) for oncoKB annotator
+        df_CNA = df_cna_thresh.loc[~(df_cna_thresh == 0).all(axis=1)]
+        df_CNA.to_csv(os.path.join(suppdir, 'data_CNA_short.txt'), sep='\t', index=True)
+    
+    
     # generate expression data and metadata file if input file exists
     if gepfile:
         # write metadata files
