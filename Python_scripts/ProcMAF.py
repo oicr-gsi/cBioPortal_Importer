@@ -174,10 +174,10 @@ if __name__ == "__main__":
         df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
 
         # for cbioportal input
-        df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False)
+        df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
         
         # unfiltered data
-        df_cbio_anno.to_csv(os.path.join(suppdir, 'unfiltered_data_mutations_extended.txt'), sep="\t", index=False)
+        df_cbio_anno.to_csv(os.path.join(suppdir, 'unfiltered_data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
     
     else:
         df_cbio_filt = pd.read_csv(args.maffile, sep="\t", header=0)
