@@ -18,14 +18,13 @@ import json
 import glob
 import zipfile
 import pandas as pd 
+import gc 
 from rpy2 import robjects 
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
 
 pandas2ri.activate()
 cntools = importr('CNTools')
-
-
 
 
 
@@ -387,7 +386,152 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     return segData, df_cna, df_cna_thresh
 
 
+######################
 
+
+
+def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
+    '''
+    Adds a VAF column to a MAF DataFrame.
+    Parameters
+    ----------
+    - maf_df (pd.DataFrame): The MAF DataFrame containing mutation data.
+    - alt_col (str): The name of the column representing the alternate allele count.
+    - dep_col (str): The name of the column representing the depth. 
+    - vaf_header (str): The name for the new column that will hold the VAF values.
+    Returns
+    -------
+    - maf_df (pd.DataFrame) : The modified dataframe with the VAF column. 
+    '''
+    # print a warning if any values are missing (shouldn't happen), but change them to 0
+    if maf_df[alt_col].isnull().any() or maf_df[dep_col].isnull().any():
+        print('Warning! Missing values found in one of the count columns')
+        maf_df[alt_col] = maf_df[alt_col].fillna(0)
+        maf_df[dep_col] = maf_df[dep_col].fillna(0)
+    
+    # ensure factors end up as numeric
+    maf_df[alt_col] = pd.to_numeric(maf_df[alt_col], errors='coerce')
+    maf_df[dep_col] = pd.to_numeric(maf_df[dep_col], errors='coerce')
+
+    # ensure position comes after alternate count field 
+    bspot = maf_df.columns.get_loc(alt_col)
+    maf_df.insert(bspot + 1, vaf_header, maf_df[alt_col] / maf_df[dep_col])
+
+    # check for any NAs
+    if maf_df[vaf_header].isnull().any():
+        print('Warning! There are missing values in the new vaf column')
+        maf_df[vaf_header] = maf_df[vaf_header].fillna(0)
+    
+    return maf_df
+    
+
+def procVEP(datafile):
+    '''
+    Processes the input MAF file, adding various computed columns, and applying multiple filters to prepare the data for further analysis.
+    Parameters
+    ----------
+    - datafile (str): The file path to the input in tab-separated format.
+    Returns
+    -------
+    - df_anno (pd.DataFrame) : The modified dataframe. 
+    '''
+    print("--- reading data ---")
+    data = pd.read_csv(datafile, sep="\t")
+
+    print('--- doing some formatting ---')
+
+    # add vaf columns 
+    print('add tumor_vaf')
+    data = addVAFtoMAF(data, 't_alt_count', 't_depth', 'tumor_vaf')
+    print('add normal_vaf')
+    data = addVAFtoMAF(data, 'n_alt_count', 'n_depth', 'normal_vaf')
+
+    # clear memory (important when the mafs are huge with millions and millions of lines)
+    df_anno = data
+    del data
+    gc.collect()
+
+    # add oncogenic yes or no columns 
+    print('add oncogenic status')
+    df_anno['oncogenic_binary'] = df_anno['oncogenic'].apply(lambda x: 'YES' if x in ['Oncogenic', 'Likely Oncogenic'] else 'NO')
+
+    # add common_variant yes or no columns
+    df_anno['ExAC_common'] = df_anno['FILTER'].apply(lambda x: 'YES' if 'common_variant' in x else 'NO')
+
+    # add POPMAX yes or no columns 
+    print('add population level frequency')
+    gnomad_cols = ['gnomAD_AFR_AF', 'gnomAD_AMR_AF', 'gnomAD_ASJ_AF', 'gnomAD_EAS_AF', 'gnomAD_FIN_AF', 'gnomAD_NFE_AF', 'gnomAD_OTH_AF', 'gnomAD_SAS_AF']
+    df_anno[gnomad_cols] = df_anno[gnomad_cols].fillna(0)
+    df_anno['gnomAD_AF_POPMAX'] = df_anno[gnomad_cols].max(axis=1)
+
+    # caller artifact filters 
+    print('apply filters')
+    df_anno['FILTER'] = df_anno['FILTER'].replace('clustered_events', 'PASS')
+    df_anno['FILTER'] = df_anno['FILTER'].replace('common_variant', 'PASS')
+
+    # some specific filter flags should be rescued if oncogenic (i.e. EGFR had issues here)
+    print("rescue filter flags if oncogenic")
+    df_anno['FILTER'] = df_anno.apply(
+        lambda row: 'PASS' if row['oncogenic_binary'] == 'YES' and row['FILTER'] in ['triallelic_site', 'clustered_events;triallelic_site', 'clustered_events;homologous_mapping_event'] else row['FILTER'],
+        axis=1
+    )
+
+    # Artifact Filter
+    print('artifact filter')
+    df_anno['TGL_FILTER_ARTIFACT'] = df_anno['FILTER'].apply(lambda x: 'PASS' if x == 'PASS' else 'Artifact')
+
+    # ExAC Filter
+    print('exac filter')
+    df_anno['TGL_FILTER_ExAC'] = df_anno.apply(
+        lambda row: 'ExAC_common' if row['ExAC_common'] == 'YES' and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
+        axis=1
+    )
+
+    # gnomAD_AF_POPMAX Filter
+    print('population frequency filter')
+    df_anno['TGL_FILTER_gnomAD'] = df_anno.apply(
+        lambda row: 'gnomAD_common' if row['gnomAD_AF_POPMAX'] > 0.001 and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
+        axis=1
+    )
+
+    # VAF Filter
+    print('VAF Filter')
+    df_anno['TGL_FILTER_VAF'] = df_anno.apply(
+        lambda row: 'PASS' if row['tumor_vaf'] >= 0.1 or 
+        (row['tumor_vaf'] < 0.1 and row['oncogenic_binary'] == 'YES' and 
+         ((row['Variant_Classification'] in ['In_Frame_Del', 'In_Frame_Ins']) or 
+          row['Variant_Type'] == 'SNP')) 
+        else 'low_VAF', axis=1
+    )
+
+    # Mark filters 
+    print('Mark filters')
+    df_anno['TGL_FILTER_VERDICT'] = df_anno.apply(
+        lambda row: 'PASS' if row['TGL_FILTER_ARTIFACT'] == 'PASS' and 
+                          row['TGL_FILTER_ExAC'] == 'PASS' and 
+                          row['TGL_FILTER_gnomAD'] == 'PASS' and 
+                          row['TGL_FILTER_VAF'] == 'PASS' 
+                  else ';'.join([row['TGL_FILTER_ARTIFACT'], row['TGL_FILTER_ExAC'], 
+                                 row['TGL_FILTER_gnomAD'], row['TGL_FILTER_VAF']]), axis=1
+    )
+
+    return df_anno
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#########################
 
 def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep):
     '''
@@ -2151,33 +2295,6 @@ def convert_fusion_to_sv(fusion_file, sv_file):
     newfile.close()
     
 
-def process_mutations(maffile, tglpipe, ProcMAF, outdir):
-    '''
-    (str, bool, bool, str, str) -> None
-    
-    Process variant calls through R script ProcMaf.r to generate mutaion data files
-    data_mutations_extended.txt, unfiltered_data_mutations_extended.txt and weights.txt
-    
-    Parameters
-    ----------
-    - maffile (str): Path to concatenated maf file with variant calls
-    - tglpipe (bool):  filter variants according to TGL specifications if True
-    - ProcMaf (str): Path to R script ProcMaf.r
-    - outdir (str): - outdir (str): Path to the output directory where mafdir, sgedir, fusdir and gepdir folders are located
-    '''
-    
-    tglpipe = 'TRUE' if tglpipe else 'FALSE'
-        
-    cmd = 'Rscript {0} {1} {2} {3}'.format(ProcMAF, maffile, tglpipe, outdir)
-    print(cmd) 
-    
-    if os.path.isfile(ProcMAF):
-        exit_code = subprocess.call(cmd, shell=True)
-        if exit_code:
-            sys.exit('Could not process mutations.')
-    else:
-        raise FileNotFoundError('Cannot find R script path {}'.format(ProcMAF))
-    
 
 def get_sample_info(clinical_samples, outputfile):
     '''
@@ -2264,11 +2381,11 @@ def check_configuration(config):
         raise ValueError('ERROR. Missing sections {0} from config'.format(', '.join(missing_sections)))
         
     # check paths from resources
-    expected_resources = ['procmaf', 'procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
+    expected_resources = ['procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
     missing_resources = [i for i in expected_resources if i not in list(config['Resources'].keys())]
     if missing_resources:
         raise ValueError('ERROR. Missing resources: {0}'.format(', '.join(missing_resources)))
-    invalid_resource_files = [i for i in ['procmaf', 'procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist'] if config['Resources'][i] and os.path.isfile(config['Resources'][i]) == False]
+    invalid_resource_files = [i for i in ['procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist'] if config['Resources'][i] and os.path.isfile(config['Resources'][i]) == False]
     if invalid_resource_files:
         raise ValueError('ERROR. Provide valid path for {0}'.format(', '.join(invalid_resource_files)))
     
@@ -2337,10 +2454,10 @@ def extract_resources_from_config(config):
     - config (configparser.ConfigParser): Config file parsed with configparser
     '''
     
-    resources = ['procmaf', 'procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
+    resources = ['procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
     L = [config['Resources'][i] for i in resources]
-    ProcMAF, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = L
-    return ProcMAF, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist
+    ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = L
+    return ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist
     
 
 def extract_options_from_config(config):
@@ -3062,7 +3179,7 @@ def make_import_folder(args):
     print('read and checked config')
     
     # extract variables from config
-    ProcMAF, ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
+    ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
     mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
@@ -3287,7 +3404,23 @@ def make_import_folder(args):
             print('Annotated variants with MafAnnotator')
     
         # generate mutations data
-        process_mutations(maffile, tglpipe, ProcMAF, outdir)
+        print('Processing Mutation data from {0}'.format(maffile))
+        # only do the filtering steps if tglpipe is set to TRUE
+        if tglpipe:
+            print('tglpipe is set to true, filtering data according to tgl specifications')
+            df_cbio_anno = procVEP(maffile)
+            df_cbio_filt = df_cbio_anno[df_cbio_anno['TGL_FILTER_VERDICT'] == 'PASS']
+            # get snvs for dcsigs
+            df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
+            # for cbioportal input
+            df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
+            # unfiltered data
+            df_cbio_anno.to_csv(os.path.join(suppdir, 'unfiltered_data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
+        else:
+            df_cbio_filt = pd.read_csv(args.maffile, sep="\t", header=0)
+            df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
+            df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
+
         # write metadata file
         write_metadata(os.path.join(cbiodir, 'meta_mutations_extended.txt'), project_name, 'maf', genome)
         print('wrote mutations metadata')
