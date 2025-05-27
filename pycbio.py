@@ -22,6 +22,9 @@ import gc
 from rpy2 import robjects 
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
+from scipy.stats import zscore
+
+
 
 pandas2ri.activate()
 cntools = importr('CNTools')
@@ -386,9 +389,6 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     return segData, df_cna, df_cna_thresh
 
 
-######################
-
-
 
 def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
     '''
@@ -519,6 +519,85 @@ def procVEP(datafile):
 
 
 
+###################
+
+
+
+def readGep(gepfile):
+    '''
+    Reads in a sample study file and returns a list of sample names or IDs.
+    Parameters
+    ----------
+    - gepfile (str): Path to the sample study file.
+    Returns
+    -------
+    - study_samples (list): List of sample names or IDs.
+    '''
+    study_samples = []
+    with open(gepfile, 'r') as file:
+        study_samples = [line.strip() for line in file]
+
+    return study_samples
+
+
+def preProcRNA(fpkmfile, enscon, genelist=None):
+    '''
+    Preprocesses RNA expression data by merging with gene symbol annotations, optionally subsetting by a gene list.
+    Parameters
+    ----------
+    - fpkmfile (str): Path to the input concatenated FPKM data from RSEM workflow.
+    - enscon (str): Path to a tab-delimited file with ENSEMBLE gene ID and Hugo_Symbol.
+    - genelist (str, optional): Path to a file with list of Hugo Symbols to report in the final results. Default is None.
+    Returns
+    -------
+    - df (pd.DataFrame): Preprocessed DataFrame with gene expression data.
+    '''
+    # check if genelist is None when preProcRNA.py is called by pycbio.py and genelist is omitted
+    if genelist:
+        print('genelist is used during RNA processing')
+    else:
+        print('genelist is not used during RNA processing')
+        
+    # read in data
+    gep_data = pd.read_csv(fpkmfile, sep="\t")
+    ens_conv = pd.read_csv(enscon, sep="\t", header=None)
+
+    # rename columns
+    ens_conv.columns = ["gene_id", "Hugo_Symbol"]
+
+    # merge in Hugo's, re-order columns, deduplicate
+    df = pd.merge(gep_data, ens_conv, on="gene_id", how="left")
+    df = df.iloc[:, [-1] + list(range(1, df.shape[1] - 1))]
+    df = df[~df.duplicated(subset=[df.columns[0]])]
+
+    df.set_index("Hugo_Symbol", inplace=True)
+
+    # subset if gene list is given
+    if genelist is not None:
+        with open(genelist, 'r') as file:
+            keep_genes = [line.strip() for line in file]
+
+        df = df[df.index.isin(keep_genes)]
+    
+    # return the data frame
+    return df
+
+
+def compZ(df):
+    '''
+    Computes row-wise z-scores for a given DataFrame and fills NaN values with zero.
+    Parameters
+    ----------
+    - df (pd.DataFrame): Input DataFrame with gene expression data.
+    Returns
+    -------
+    - df_zscore (pd.DataFrame): DataFrame with z-scores for each gene.
+    '''
+    # scale row-wise
+    df_zscore = df.apply(lambda x: (x - x.mean()) / x.std(), axis=1)
+    df_zscore = df_zscore.fillna(0)
+
+    return df_zscore
 
 
 
@@ -532,6 +611,20 @@ def procVEP(datafile):
 
 
 #########################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep):
     '''
@@ -2075,34 +2168,6 @@ def remove_indels(maffile, outputfile):
     return total, kept                
 
 
-        
-def process_rna(gepfile, enscon, genelist, ProcRNA, outdir):
-    '''
-    (str, str, str | None, str, str) -> None
-    
-    Process RNAseq expression data through R script ProcRNA to generate data_expression.txt
-    and data_expression_zscores.txt files
- 
-    Parameters
-    ----------
-    - gepfile (str): Path to concatenated file with expression data
-    - enscon (str): path to tab-delimited 2 column file of ENSEMBLE gene ID and Hugo_Symbol 
-    - genelist (str | None): Path to list of Hugo Symbols (optional)
-    - ProcRNA (str) Path to R script ProcRNA.r
-    - outdir (str): - outdir (str): Path to the output directory where mafdir, sgedir, fusdir and gepdir folders are located
-    '''
-    
-    cmd = 'Rscript {0} {1} {2} {3} {4}'.format(ProcRNA, gepfile, enscon, genelist, outdir)
-    print(cmd)
-    
-    if os.path.isfile(ProcRNA):
-        exit_code = subprocess.call(cmd, shell=True)
-        if exit_code:
-            sys.exit('Could not process RNAseq expression.')
-    else:
-        raise FileNotFoundError('Cannot find R script path {}'.format(ProcRNA))
-    
-
 def process_fusion(fusfile, entcon, min_fusion_reads, ProcFusion, outdir):
     '''
     (str, str, int, str, str) -> None    
@@ -2381,11 +2446,11 @@ def check_configuration(config):
         raise ValueError('ERROR. Missing sections {0} from config'.format(', '.join(missing_sections)))
         
     # check paths from resources
-    expected_resources = ['procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
+    expected_resources = ['token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
     missing_resources = [i for i in expected_resources if i not in list(config['Resources'].keys())]
     if missing_resources:
         raise ValueError('ERROR. Missing resources: {0}'.format(', '.join(missing_resources)))
-    invalid_resource_files = [i for i in ['procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist'] if config['Resources'][i] and os.path.isfile(config['Resources'][i]) == False]
+    invalid_resource_files = [i for i in ['token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist'] if config['Resources'][i] and os.path.isfile(config['Resources'][i]) == False]
     if invalid_resource_files:
         raise ValueError('ERROR. Provide valid path for {0}'.format(', '.join(invalid_resource_files)))
     
@@ -2454,10 +2519,10 @@ def extract_resources_from_config(config):
     - config (configparser.ConfigParser): Config file parsed with configparser
     '''
     
-    resources = ['procrna', 'token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
+    resources = ['token', 'enscon_hg38', 'enscon_hg19', 'entcon', 'genebed_hg38', 'genebed_hg19', 'genelist', 'oncolist']
     L = [config['Resources'][i] for i in resources]
-    ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = L
-    return ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist
+    token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = L
+    return token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist
     
 
 def extract_options_from_config(config):
@@ -3179,7 +3244,7 @@ def make_import_folder(args):
     print('read and checked config')
     
     # extract variables from config
-    ProcRNA, token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
+    token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
     mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
@@ -3456,10 +3521,24 @@ def make_import_folder(args):
         write_metadata(os.path.join(cbiodir, 'meta_expression_zscores.txt'), project_name, 'zscore', genome)
         print('wrote expression metadata files')
         # write all samples with rna data to file 
-        list_gep_samples(gepdir, os.path.join(outdir, 'gep_study.list'))
+        gep_study_file = os.path.join(outdir, 'gep_study.list')
+        list_gep_samples(gepdir, gep_study_file)
         # generate expression data files
-        process_rna(gepfile, enscon, genelist, ProcRNA, outdir)
+        print('Processing RNASEQ data from {0}'.format(gepfile))
+        # get list of samples in study
+        study_samples = readGep(gep_study_file)
+        # preprocess the full data frame
+        df = preProcRNA(gepfile, enscon, genelist)
+        print('getting STUDY-level data')
+        # subset data to STUDY level data for cbioportal
+        df_study = df[study_samples]
+        # write the raw STUDY data
+        df_study.to_csv(os.path.join(cbiodir, "data_expression.txt"), sep="\t", header=True, index=True)
+        # z-scores STUDY
+        df_zscore = compZ(df_study)
+        df_zscore.to_csv(os.path.join(cbiodir, "data_expression_zscores.txt"), sep="\t", header=True, index=True)
         print('wrote expression data files')        
+    
     # generate fusion data and metadata if input file exists
     if fusfile:
         # write SV metadata
