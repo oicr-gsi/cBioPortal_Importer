@@ -182,4 +182,4 @@ if __name__ == "__main__":
     else:
         df_cbio_filt = pd.read_csv(args.maffile, sep="\t", header=0)
         df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
-        df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False)
+        df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
