@@ -24,6 +24,7 @@ from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
 from scipy.stats import zscore
 
+import warnings
 
 
 pandas2ri.activate()
@@ -121,14 +122,21 @@ def convert_purple_to_seg(somatic_file, purity, ploidy, sample_name):
         line = line.rstrip()
         if line:
             line = line.split('\t')
-            L.append([sample_name, line[header.index('chromosome')],
-                   line[header.index('start')],
-                   line[header.index('end')],
-                   line[header.index('bafCount')]])
             # compute seg.mean       
             copyNumber = float(line[header.index('copyNumber')])
-            adjusted_copy_number = np.log2(1 + (purity *(copyNumber - ploidy)/ploidy))
-            L.append(str(adjusted_copy_number))
+            
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", RuntimeWarning)
+                try:
+                    adjusted_copy_number = np.log2(1 + (purity *(copyNumber - ploidy)/ploidy))
+                except:
+                    adjusted_copy_number = np.nan
+                finally:
+                    L.append([sample_name, line[header.index('chromosome')],
+                              line[header.index('start')],
+                              line[header.index('end')],
+                              line[header.index('bafCount')],
+                              str(adjusted_copy_number)])
     infile.close()
     
     return L
@@ -320,6 +328,9 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     # small fix segmentation data
     segData = pd.read_csv(segfile, sep='\t')
     segData['chrom'] = segData['chrom'].str.replace('chr', '')
+
+    # remove NA
+    segData.dropna(inplace=True)
 
     # convert pandas dataframe to R dataframe 
     segData_r = pandas2ri.py2rpy(segData)
@@ -519,9 +530,6 @@ def procVEP(datafile):
 
 
 
-###################
-
-
 
 def readGep(gepfile):
     '''
@@ -598,30 +606,6 @@ def compZ(df):
     df_zscore = df_zscore.fillna(0)
 
     return df_zscore
-
-
-
-
-
-
-
-
-
-
-
-
-#########################
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -3591,12 +3575,15 @@ def generate_mapfile(args):
     data = json.load(infile)
     infile.close()
     
+    # create directories
+    os.makedirs(args.outdir, exist_ok=True)
+        
     mapfile = os.path.join(args.outdir, 'map.csv')
     newfile = open(mapfile, 'w')
         
     for donor in data:
         for sample in data[donor]:
-            L = [donor,sample,'','','','']
+            L = [donor,sample,'NA','NA','NA','NA']
             for workflow in data[donor][sample]:
                 if 'sequenza' in workflow.lower():
                     # create a sequenza directory
@@ -3612,7 +3599,7 @@ def generate_mapfile(args):
                     assert len(segfile) == 1
                     segfile = segfile[0]
                     assert os.path.isfile(segfile)
-                    L[2] = segfile       
+                    L[3] = segfile       
                 elif 'purple' in workflow.lower():
                     # create a purple directory
                     purpledir =  os.path.join(args.outdir, 'purple')
@@ -3625,15 +3612,15 @@ def generate_mapfile(args):
                     # generate segmentation file from purple
                     outputfile = os.path.join(sampledir, '{0}.purple.seg'.format(sample))
                     generate_purple_segmentation(cnv_file, purity_file, sample, outputfile)
-                    L[2] = outputfile
+                    L[3] = outputfile
                 elif 'varianteffectpredictor' in workflow.lower():
-                    L[3] = data[donor][sample][workflow]
+                    L[2] = data[donor][sample][workflow]
                 elif 'rsem' in workflow.lower():
                     L[4] = data[donor][sample][workflow]
                 elif 'mavis' in workflow.lower():
                     L[5] = data[donor][sample][workflow]
-            assert all(L)  
             newfile.write(','.join(L) + '\n')
+
 
     newfile.close()
  
