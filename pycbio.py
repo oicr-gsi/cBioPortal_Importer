@@ -2154,9 +2154,9 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     newfile.close()    
     #Ainslie Code, added a bunch of else statements abpve
     combined_removal_list = [removal_list,removal_reason]
-    mafdir, end1 = os.path.split(outputfile)
+    begin1, end1 = os.path.split(outputfile)
     
-    removed_filtered_data(maffile, os.path.join(mafdir, 'filtered_removed.txt'), combined_removal_list)
+    removed_filtered_data(maffile, os.path.join(begin1, 'filtered_removed.txt'), combined_removal_list)
     
                 
     return total, kept            
