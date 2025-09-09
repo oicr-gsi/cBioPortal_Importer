@@ -2041,7 +2041,7 @@ def removed_filtered_data(infile_path, outputfile, list_of_removed_things):
     
     
     newfile.close() 
-
+    infile.close()
 
                 
 def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants):
@@ -2117,7 +2117,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                                         # variants are kept anyway when gnomAD_AF is not defined
                                         newline = line
                                         kept += 1
-                                    else:
+                                    lse:
                                         # no value for gnomAD_AF, do not keep mutation
                                         newline = ''
                                         removal_reason.append('gnomAD_AF no value')
@@ -2128,34 +2128,34 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                                         newline = line
                                         kept += 1
                                     else:
-                                       removal_reason.append('gnomAD_AF filter')
-                                       removal_list.append(line[header.index('Hugo_Symbol')])
+                                        removal_reason.append('gnomAD_AF filter')
+                                        removal_list.append(line[header.index('Hugo_Symbol')])
                             else:
                                 newline = line
                                 kept += 1
                         else:
-                           removal_reason.append('ratio t_alt_count / t_depth')
-                           removal_list.append(line[header.index('Hugo_Symbol')])
+                            removal_reason.append('ratio t_alt_count / t_depth')
+                            removal_list.append(line[header.index('Hugo_Symbol')])
                     else:
                         # discard mutations without supporting read count
                         newline = ''
                         removal_reason.append('read counts')
                         removal_list.append(line[header.index('Hugo_Symbol')])
                 else:
-                   removal_reason.append('depth')
-                   removal_list.append(line[header.index('Hugo_Symbol')])
+                    removal_reason.append('depth')
+                    removal_list.append(line[header.index('Hugo_Symbol')])
             else:
-               removal_reason.append('non valid mutation'+ (line[header.index('Variant_Classification')]))
-               removal_list.append(line[header.index('Hugo_Symbol')])
+                line = line.split('\t')
+                removal_reason.append('non valid mutation; ' + (line[header.index('Variant_Classification')]))
+                removal_list.append(line[header.index('Hugo_Symbol')])
             if newline:
-               newfile.write('\t'.join(newline) + '\n')
+                newfile.write('\t'.join(newline) + '\n')
     newfile.close()    
     #Ainslie Code, added a bunch of else statements abpve
     combined_removal_list = [removal_list,removal_reason]
-    output_removal_dir, end1 = os.path.split(outputfile)
+    mafdir1, end1 = os.path.split(outputfile)
     
-    removed_filtered_data(maffile, os.path.join(output_removal_dir, 'filtered_removed.txt'), combined_removal_list)
-    
+    removed_filtered_data(maffile, os.path.join(mafdir1, 'filtered_removed.txt'), combined_removal_list)
                 
     return total, kept            
 
