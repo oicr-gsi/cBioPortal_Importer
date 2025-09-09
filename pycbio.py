@@ -2024,8 +2024,6 @@ def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
     newfile.close()
 
 def removed_filtered_data(infile_path, outputfile, list_of_removed_things):
-
-    outputfile = outputfile + "/removal
     #open files
     newfile = open(outputfile, 'w') 
     infile = open(infile_path) #maffile
@@ -2136,7 +2134,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                                 newline = line
                                 kept += 1
                                 removal_reason.append('matched barcode')
-                   		removal_list.append(line[header.index('Hugo_Symbol')])
+                   		        removal_list.append(line[header.index('Hugo_Symbol')])
                         else:
                            removal_reason.append('ratio t_alt_count / t_depth')
                            removal_list.append(line[header.index('Hugo_Symbol')])
