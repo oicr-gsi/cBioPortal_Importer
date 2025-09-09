@@ -2117,7 +2117,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                                         # variants are kept anyway when gnomAD_AF is not defined
                                         newline = line
                                         kept += 1
-                                    lse:
+                                    else:
                                         # no value for gnomAD_AF, do not keep mutation
                                         newline = ''
                                         removal_reason.append('gnomAD_AF no value')
