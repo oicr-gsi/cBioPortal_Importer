@@ -2133,8 +2133,6 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                             else:
                                 newline = line
                                 kept += 1
-                                removal_reason.append('matched barcode')
-                   		        removal_list.append(line[header.index('Hugo_Symbol')])
                         else:
                            removal_reason.append('ratio t_alt_count / t_depth')
                            removal_list.append(line[header.index('Hugo_Symbol')])
@@ -2154,9 +2152,9 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     newfile.close()    
     #Ainslie Code, added a bunch of else statements abpve
     combined_removal_list = [removal_list,removal_reason]
-    begin1, end1 = os.path.split(outputfile)
+    output_removal_dir, end1 = os.path.split(outputfile)
     
-    removed_filtered_data(maffile, os.path.join(begin1, 'filtered_removed.txt'), combined_removal_list)
+    removed_filtered_data(maffile, os.path.join(output_removal_dir, 'filtered_removed.txt'), combined_removal_list)
     
                 
     return total, kept            
