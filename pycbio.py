@@ -28,7 +28,7 @@ import warnings
 
 
 #pandas2ri.activate()
-cntools = importr('CNTools')
+#cntools = importr('CNTools')
 
 
 
@@ -2142,7 +2142,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                         # discard mutations without supporting read count
                         newline = ''
                         removal_reason.append('read counts')
-                   	removal_list.append(line[header.index('Hugo_Symbol')])
+                        removal_list.append(line[header.index('Hugo_Symbol')])
                 else:
                    removal_reason.append('depth')
                    removal_list.append(line[header.index('Hugo_Symbol')])
@@ -2150,7 +2150,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                removal_reason.append('non valid mutation'+ (line[header.index('Variant_Classification')]))
                removal_list.append(line[header.index('Hugo_Symbol')])
             if newline:
-                newfile.write('\t'.join(newline) + '\n')
+               newfile.write('\t'.join(newline) + '\n')
     newfile.close()    
     #Ainslie Code, added a bunch of else statements abpve
     combined_removal_list = [removal_list,removal_reason]
