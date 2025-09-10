@@ -2023,27 +2023,32 @@ def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
        
     newfile.close()
 
-def removed_filtered_data(infile_path, outputfile, list_of_removed_things):
-    #open files
-    newfile = open(outputfile, 'w') 
-    infile = open(infile_path) #maffile
+def removed_filtered_data(outputfile, removed_things, header):
+    '''
+    (str, str, str)
     
-    # get file header
-    #header = infile.readline().rstrip('\n').split('\t')
+    Write a discription
+    Precondition: the maf file is unzipped.
     
-    # write header to outputfile
-    #newfile.write('\t'.join(header) + '\n')
-    id_removed = list_of_removed_things[0]
-    reason_removed = list_of_removed_things[1]
-    
-    for line, id in enumerate(id_removed):
-    	newfile.write(id +'\t' + reason_removed[line] + '\n')
-    
-    
-    newfile.close() 
-    infile.close()
+    Parameters
+    ----------
+    - outputfile (str):
+    - removed_things (str):
+    - header (str):
+    '''
+    if not os.path.isfile(outputfile):
 
-                
+        #open files
+        newfile = open(outputfile, 'w')
+        # get file header
+        #write header to outputfile
+        newfile.write(header+'\n')
+    else:
+        newfile = open(outputfile, 'a')
+
+    newfile.write(removed_things+'\n')
+    newfile.close() 
+         
 def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants):
     '''
     (str, str, int, float, float, bool) -> (int, int)
@@ -2069,7 +2074,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     # open files
     newfile = open(outputfile, 'w')
     infile = open(maffile)
-    
+        
     # get file header
     header = infile.readline().rstrip('\n').split('\t')
     
@@ -2083,9 +2088,18 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                           #ADD AINSLIE "5'Flank", "Splie_Region", "Targeted_Region"
     exclude = ['str_contraction', 't_lod_fstar']   
     #Ainslie Code
-    #list to document removal
-    removal_list = []
-    removal_reason = []
+    mafdir1, end1 = os.path.split(outputfile)
+    #removal directory
+    filtered_out_dir = os.path.join(mafdir1, 'filtered_removed.txt')
+    header_rem_f = 'Hugo_Symbol\tReason for filtering\tChromosome\tStart Posistion\tEnd Posistion\tRef Allele'
+    #ADDED TO SPEED UP SEARCHING
+    h_s=header.index('Hugo_Symbol')
+    chr_n=header.index('Chromosome')
+    s_p=header.index('Start_Position')
+    e_p=header.index('End_Position')
+    ref_a=header.index('Reference_Allele')
+    var_c=header.index('Variant_Classification')
+
 
     # apply maf filters to all mutations
     for line in infile:
@@ -2120,45 +2134,42 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                                     else:
                                         # no value for gnomAD_AF, do not keep mutation
                                         newline = ''
-                                        removal_reason.append('gnomAD_AF no value')
-                                        removal_list.append(line[header.index('Hugo_Symbol')])
+                                        removal_fil_info = f"{line[h_s]} \tgnomAD_AF no value \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
+                                        removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
                                 else:
                                     # compare gnomAD_AF to folder
                                     if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
                                         newline = line
                                         kept += 1
                                     else:
-                                        removal_reason.append('gnomAD_AF filter')
-                                        removal_list.append(line[header.index('Hugo_Symbol')])
+                                        # compare gnomAD_AF to folder
+                                        removal_fil_info = f"{line[h_s]} \tt_alt_count\t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
+                                        removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f) 
                             else:
                                 newline = line
                                 kept += 1
                         else:
-                            removal_reason.append('ratio t_alt_count / t_depth')
-                            removal_list.append(line[header.index('Hugo_Symbol')])
+                            removal_fil_info = f"{line[h_s]} \tt_alt_count\t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
+                            removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f) 
                     else:
                         # discard mutations without supporting read count
                         newline = ''
-                        removal_reason.append('read counts')
-                        removal_list.append(line[header.index('Hugo_Symbol')])
+                        removal_fil_info = f"{line[h_s]} \tread counts \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
+                        removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
                 else:
-                    removal_reason.append('depth')
-                    removal_list.append(line[header.index('Hugo_Symbol')])
+                    removal_fil_info = f"{line[h_s]} \tdepth \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
+                    removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
             else:
                 line = line.split('\t')
-                removal_reason.append('non valid mutation; ' + (line[header.index('Variant_Classification')]))
-                removal_list.append(line[header.index('Hugo_Symbol')])
+                removal_reason = 'non valid mutation; ' + line[var_c]
+                removal_fil_info = f"{line[h_s]} \t{removal_reason} \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
+                removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
+
             if newline:
                 newfile.write('\t'.join(newline) + '\n')
     newfile.close()    
-    #Ainslie Code, added a bunch of else statements abpve
-    combined_removal_list = [removal_list,removal_reason]
-    mafdir1, end1 = os.path.split(outputfile)
     
-    removed_filtered_data(maffile, os.path.join(mafdir1, 'filtered_removed.txt'), combined_removal_list)
-                
-    return total, kept            
-
+    return total, kept        
 
 def remove_indels(maffile, outputfile):
     '''
