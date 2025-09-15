@@ -3189,12 +3189,12 @@ def remove_samples_from_gepfile(gepfile, discarded_samples):
     '''
     (str, list) -> int
     
-    Delete fusions from the fusion file for samples in discarded samples
-    and returns the number of removed fusions
+    Delete events from the gep file for samples in discarded samples
+    and returns the number of removed events
     
     Parameters
     ----------
-    - fusfile (str): Path to the concatenated fusion file
+    - gepfile (str): Path to the concatenated gep file
     - discarded_samples (list): List of samples to exclude
     '''
 
