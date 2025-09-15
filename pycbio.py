@@ -2028,7 +2028,6 @@ def removed_filtered_data(outputfile, removed_things, header):
     (str, str, str)
     
     Write a discription
-    Precondition: the maf file is unzipped.
     
     Parameters
     ----------
@@ -2036,21 +2035,22 @@ def removed_filtered_data(outputfile, removed_things, header):
     - removed_things (str):
     - header (str):
     '''
-    if not os.path.isfile(outputfile):
-
-        #open files
-        newfile = open(outputfile, 'w')
-        # get file header
-        #write header to outputfile
-        newfile.write(header+'\n')
-    else:
-        newfile = open(outputfile, 'a')
-
-    newfile.write(removed_things+'\n')
+    #open files
+    newfile = open(outputfile, 'w')
+    # get file header
+    #write header to outputfile
+    for file_content in header:
+        newfile.write(file_content+'\t')
+    for line in removed_things:
+        newfile.write('\n')
+        for value in line.values():
+            newfile.write(f"{value}\t")
+    
     newfile.close() 
          
-def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants):
-    '''
+def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants, removedfile):
+    
+   '''
     (str, str, int, float, float, bool) -> (int, int)
     
     Writes records from maffile to outputfile if mutations pass depth, alt_freq and gnomAd_AF filters
@@ -2066,6 +2066,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     - gnomAD_AF_filter (float): Maximum allele frequency is the Genome Aggregation Database
                                 if Matched_Norm_Sample_Barcode is unmatched
     - keep_variants(bool): Keep variants with missing gnomAD_AF values when Matched_Norm_Sample_Barcode is unmatched if True 
+    - removedfile (str):
     '''
     
     # count the number of mutations before and after filtering
@@ -2074,24 +2075,19 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     # open files
     newfile = open(outputfile, 'w')
     infile = open(maffile)
-        
+    
     # get file header
     header = infile.readline().rstrip('\n').split('\t')
-    
+   
     # write header to outputfile
     newfile.write('\t'.join(header) + '\n')
     
     # make a list of accepted mutations
     valid_mutations = ['Frame_Shift_Del',  'Frame_Shift_Ins', 'In_Frame_Del',
                           'In_Frame_Ins', 'Missense_Mutation', 'Nonsense_Mutation',
-                          'Nonstop_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site'] 
-                          #ADD AINSLIE "5'Flank", "Splie_Region", "Targeted_Region"
+                          'Nonstop_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site', 
+                          "5'Flank", "Splie_Region", "Targeted_Region"]
     exclude = ['str_contraction', 't_lod_fstar']   
-    #Ainslie Code
-    mafdir1, end1 = os.path.split(outputfile)
-    #removal directory
-    filtered_out_dir = os.path.join(mafdir1, 'filtered_removed.txt')
-    header_rem_f = 'Hugo_Symbol\tReason for filtering\tChromosome\tStart Posistion\tEnd Posistion\tRef Allele'
     #ADDED TO SPEED UP SEARCHING
     h_s=header.index('Hugo_Symbol')
     chr_n=header.index('Chromosome')
@@ -2099,7 +2095,10 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     e_p=header.index('End_Position')
     ref_a=header.index('Reference_Allele')
     var_c=header.index('Variant_Classification')
+    var_t=header.index('Variant_Type')
+    tum_bar=header.index('Tumor_Sample_Barcode')
 
+    filtered_out_list = []
 
     # apply maf filters to all mutations
     for line in infile:
@@ -2134,44 +2133,41 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                                     else:
                                         # no value for gnomAD_AF, do not keep mutation
                                         newline = ''
-                                        removal_fil_info = f"{line[h_s]} \tgnomAD_AF no value \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
-                                        removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
+                                        filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF has no value & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                                 else:
                                     # compare gnomAD_AF to folder
                                     if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
                                         newline = line
                                         kept += 1
                                     else:
-                                        # compare gnomAD_AF to folder
-                                        removal_fil_info = f"{line[h_s]} \tt_alt_count\t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
-                                        removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f) 
+                                        filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF value to larger & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                             else:
                                 newline = line
                                 kept += 1
                         else:
-                            removal_fil_info = f"{line[h_s]} \tt_alt_count\t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
-                            removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f) 
+                            filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "t_alt_count / t_depth", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                     else:
                         # discard mutations without supporting read count
                         newline = ''
-                        removal_fil_info = f"{line[h_s]} \tread counts \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
-                        removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
+                        filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "unsupported read count", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                 else:
-                    removal_fil_info = f"{line[h_s]} \tdepth \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
-                    removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
+                    filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "Depth to small", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
             else:
                 line = line.split('\t')
                 removal_reason = 'non valid mutation; ' + line[var_c]
-                removal_fil_info = f"{line[h_s]} \t{removal_reason} \t{line[chr_n]} \t{line[s_p]} \t{line[e_p]} \t{line[ref_a]}"
-                removed_filtered_data(filtered_out_dir, removal_fil_info, header_rem_f)
+                filtered_out_list.append({"hugo_symbol": line[h_s], "reason": f"{removal_reason}", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
 
             if newline:
                 newfile.write('\t'.join(newline) + '\n')
-    newfile.close()    
-    
-    return total, kept        
+    newfile.close()
+    #must match with the keys
+    header_list = ["hugo_symbol", "reason", "variant_type", "chr", "start_pos", "end_pos", "ref_allel", "tumor_bar"]
+    removed_filtered_data(removedfile, filtered_out_list, header_list)
 
-def remove_indels(maffile, outputfile):
+    return total, kept            
+        
+
+def remove_indels(maffile, outputfile, removedfile):
     '''
     (str, str) -> (int, int)
     
@@ -2183,21 +2179,34 @@ def remove_indels(maffile, outputfile):
     ----------
     - maffile (str): Path to the maf file (unzipped)
     - outputfile (str): Path to the output file
+    - removedfile (str):
     '''
-    
-    # count the number of mutations before and after filtering
+     # count the number of mutations before and after filtering
     total, kept = 0, 0
     
     # open files
     newfile = open(outputfile, 'w')
     infile = open(maffile)
     
-    # get file header
     header = infile.readline().rstrip().split('\t')
     
     # write header to outputfile
     newfile.write('\t'.join(header) + '\n')
-    
+
+    #ADDED TO SPEED UP SEARCHING
+    h_s=header.index('Hugo_Symbol')
+    chr_n=header.index('Chromosome')
+    s_p=header.index('Start_Position')
+    e_p=header.index('End_Position')
+    ref_a=header.index('Reference_Allele')
+    var_c=header.index('Variant_Classification')
+    var_t=header.index('Variant_Type')
+    tum_bar=header.index('Tumor_Sample_Barcode')
+
+
+    filtered_out_list = []
+
+
     for line in infile:
         # count total mutations
         total += 1
@@ -2207,8 +2216,19 @@ def remove_indels(maffile, outputfile):
                 # record mutations without indels and update counter
                 newfile.write('\t'.join(line) + '\n')
                 kept += 1
-    newfile.close()                
-    return total, kept                
+            else:
+                line = line.split('\t') 
+                removal_reason = 'INDEL; ' + line[var_c]
+                filtered_out_list.append({"hugo_symbol": line[h_s], "reason": f"{removal_reason}", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+    
+    newfile.close()
+
+    header_list = ["hugo_symbol", "reason", "variant_type", "chr", "start_pos", "end_pos", "ref_allel", "tumor_bar"]
+    removed_filtered_data(removedfile, filtered_out_list, header_list)
+
+
+    return total, kept 
+              
 
 
 def process_fusion(fusfile, entcon, min_fusion_reads, ProcFusion, outdir):
@@ -3474,7 +3494,7 @@ def make_import_folder(args):
         maffile = os.path.join(mafdir, 'input.maf.txt')
         # filter mutations and indels if option is activated
         if filter_variants:
-            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants)
+            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants, os.path.join(mafdir, 'filtered.mutations.removed.txt'))
             print("before mutations filtering: ", total)
             print("after mutations filtering: ", kept)
             print('filtered variants')
@@ -3484,12 +3504,14 @@ def make_import_folder(args):
             if filter_variants:
                 maf_to_filter = os.path.join(mafdir, 'filtered.mutations.txt')
                 maf_filtered = os.path.join(mafdir, 'filtered.mutations.indels.txt')
+                maf_rem = os.path.join(mafdir, 'filtered.mutations.indels.remove.txt')
             else:
                 maf_to_filter = os.path.join(mafdir, 'all_mutations.maf.txt')
                 maf_filtered = os.path.join(mafdir, 'filtered.indels.txt')
+                maf_rem = os.path.join(mafdir, 'filtered.indels.remove.txt')
             # output file for MafAnnotator
             maf_input_annotation = maf_filtered
-            total, kept = remove_indels(maf_to_filter, maf_filtered)
+            total, kept = remove_indels(maf_to_filter, maf_filtered, maf_rem)
             print("before indel filtering: ", total)
             print("after indel filtering: ", kept)
             print('filtered indels')
