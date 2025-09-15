@@ -3189,8 +3189,8 @@ def remove_samples_from_gepfile(gepfile, discarded_samples):
     '''
     (str, list) -> int
     
-    Delete events from the gep file for samples in discarded samples
-    and returns the number of removed events
+    Delete genes from the gep file for samples in discarded samples
+    and returns the number of removed genes
     
     Parameters
     ----------
