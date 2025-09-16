@@ -17,18 +17,18 @@ import numpy as np
 import json
 import glob
 import zipfile
-#import pandas as pd 
+import pandas as pd 
 import gc 
-#from rpy2 import robjects 
-#from rpy2.robjects import pandas2ri
-#from rpy2.robjects.packages import importr
-#from scipy.stats import zscore
+from rpy2 import robjects 
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.packages import importr
+from scipy.stats import zscore
 
 import warnings
 
 
-#pandas2ri.activate()
-#cntools = importr('CNTools')
+pandas2ri.activate()
+cntools = importr('CNTools')
 
 
 
@@ -70,542 +70,542 @@ def extract_files_from_map(mapfile, data_type):
     return files
 
 
-# def extract_purple_ploidy_purity(purple_purity_file):
-#     '''
-#     (str) -> (float, float)
+def extract_purple_ploidy_purity(purple_purity_file):
+    '''
+    (str) -> (float, float)
     
-#     Returns a tuple with purity and ploidy extracted from file .purple.purity.tsv
+    Returns a tuple with purity and ploidy extracted from file .purple.purity.tsv
  
-#     Parameters
-#     ----------
-#     - purple_purity_file (str): Path to the Purple .purple.purity.tsv file
-#     '''
+    Parameters
+    ----------
+    - purple_purity_file (str): Path to the Purple .purple.purity.tsv file
+    '''
     
-#     infile = open(purple_purity_file)
-#     header = infile.readline().rstrip().split('\t')
-#     content = infile.readline().rstrip().split('\t')
-#     infile.close()
+    infile = open(purple_purity_file)
+    header = infile.readline().rstrip().split('\t')
+    content = infile.readline().rstrip().split('\t')
+    infile.close()
     
-#     purity = float(content[header.index('purity')])
-#     ploidy = float(content[header.index('ploidy')])
+    purity = float(content[header.index('purity')])
+    ploidy = float(content[header.index('ploidy')])
 
-#     return purity, ploidy
+    return purity, ploidy
     
 
-# def convert_purple_to_seg(somatic_file, purity, ploidy, sample_name):
-#     '''
-#     (str, str) -> list
+def convert_purple_to_seg(somatic_file, purity, ploidy, sample_name):
+    '''
+    (str, str) -> list
     
-#     Returns a list of fields extracted from the purple somatic file
-#     corresponding to the sequenza segmentation output file 
+    Returns a list of fields extracted from the purple somatic file
+    corresponding to the sequenza segmentation output file 
     
-#     Fields are mapped and renamed as:
-#     chromosome -> chrom
-#     start -> loc.start
-#     end -> loc.end 
-#     bafCount -> num.mark
-#     copyNumber -> seg.mean adjusted with purity and ploidy  
+    Fields are mapped and renamed as:
+    chromosome -> chrom
+    start -> loc.start
+    end -> loc.end 
+    bafCount -> num.mark
+    copyNumber -> seg.mean adjusted with purity and ploidy  
     
-#     Parameters
-#     ----------
-#     - somatic_file (str): Path to the purple "purple.cnv.somatic.tsv" file
-#     - sample_name (str): Name of the sample
-#     - purity (float): Purity estimated from purple
-#     - ploidy (float): Ploidy estimated from purple
-#     '''
+    Parameters
+    ----------
+    - somatic_file (str): Path to the purple "purple.cnv.somatic.tsv" file
+    - sample_name (str): Name of the sample
+    - purity (float): Purity estimated from purple
+    - ploidy (float): Ploidy estimated from purple
+    '''
     
-    # L = [['chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']]
+    L = [['chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']]
     
-    # infile = open(somatic_file)
-    # header = infile.readline().rstrip().split('\t')
-    # for line in infile:
-    #     line = line.rstrip()
-    #     if line:
-    #         line = line.split('\t')
-    #         # compute seg.mean       
-    #         copyNumber = float(line[header.index('copyNumber')])
+    infile = open(somatic_file)
+    header = infile.readline().rstrip().split('\t')
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            # compute seg.mean       
+            copyNumber = float(line[header.index('copyNumber')])
             
-    #         with warnings.catch_warnings():
-    #             warnings.simplefilter("error", RuntimeWarning)
-    #             try:
-    #                 adjusted_copy_number = np.log2(1 + (purity *(copyNumber - ploidy)/ploidy))
-    #             except:
-    #                 adjusted_copy_number = np.nan
-    #             finally:
-    #                 L.append([sample_name, line[header.index('chromosome')],
-    #                           line[header.index('start')],
-    #                           line[header.index('end')],
-    #                           line[header.index('bafCount')],
-    #                           str(adjusted_copy_number)])
-    # infile.close()
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", RuntimeWarning)
+                try:
+                    adjusted_copy_number = np.log2(1 + (purity *(copyNumber - ploidy)/ploidy))
+                except:
+                    adjusted_copy_number = np.nan
+                finally:
+                    L.append([sample_name, line[header.index('chromosome')],
+                              line[header.index('start')],
+                              line[header.index('end')],
+                              line[header.index('bafCount')],
+                              str(adjusted_copy_number)])
+    infile.close()
     
-    # return L
+    return L
 
 
-# def generate_purple_segmentation(somatic_file, purple_purity_file, sample_name, outputfile):
-#     '''
-#     (str, str, str) -> None
+def generate_purple_segmentation(somatic_file, purple_purity_file, sample_name, outputfile):
+    '''
+    (str, str, str) -> None
     
-#     Convert the purple somatic file to a segmentation file and write to outputfile
+    Convert the purple somatic file to a segmentation file and write to outputfile
     
-#     Parameters
-#     ----------
-#     - somatic_file (str): Path to the purple "purple.cnv.somatic.tsv" file
-#     - purple_purity_file (str): Path to the Purple .purple.purity.tsv file
-#     - sample_name (str): Name of the sample
-#     - outputfile (str): Path to the outputfile
-#     '''
+    Parameters
+    ----------
+    - somatic_file (str): Path to the purple "purple.cnv.somatic.tsv" file
+    - purple_purity_file (str): Path to the Purple .purple.purity.tsv file
+    - sample_name (str): Name of the sample
+    - outputfile (str): Path to the outputfile
+    '''
 
-#     purity, ploidy = extract_purple_ploidy_purity(purple_purity_file)
+    purity, ploidy = extract_purple_ploidy_purity(purple_purity_file)
     
-#     L = convert_purple_to_seg(somatic_file, purity, ploidy, sample_name)
-#     newfile = open(outputfile, 'w')
-#     for i in L:
-#         newfile.write('\t'.join(i) + '\n')
-#     newfile.close()
+    L = convert_purple_to_seg(somatic_file, purity, ploidy, sample_name)
+    newfile = open(outputfile, 'w')
+    for i in L:
+        newfile.write('\t'.join(i) + '\n')
+    newfile.close()
 
 
-# def is_sequenza_segmentation(segfile):
-#     '''
-#     (str) -> bool
+def is_sequenza_segmentation(segfile):
+    '''
+    (str) -> bool
     
-#     Returns True if the segfile is the segmentation file from sequenza
+    Returns True if the segfile is the segmentation file from sequenza
     
-#     Parameters
-#     ----------
-#     - segfile (str):Path to a segmentation file
-#     '''
+    Parameters
+    ----------
+    - segfile (str):Path to a segmentation file
+    '''
     
-#     infile = open(segfile)
-#     header = infile.readline().rstrip().split('\t')
-#     infile.close()
+    infile = open(segfile)
+    header = infile.readline().rstrip().split('\t')
+    infile.close()
     
-#     return header == ['ID', 'chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']
+    return header == ['ID', 'chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']
 
 
-# def split_column_take_max(df, columns):
-#     '''
-#     Splits columns by ';' and takes the maximum value from a list of columns
-#     Parameters
-#     ----------
-#     - df (pd.DataFrame) : The input data that contains the columns to be processed
-#     - columns (list) : A list of columns names (str) to be processed
-#     Returns
-#     -------
-#     - df (pd.DataFrame) : The modified dataframe 
-#     '''
-#     df[columns] = df[columns].fillna(0).replace('', 0)
+def split_column_take_max(df, columns):
+    '''
+    Splits columns by ';' and takes the maximum value from a list of columns
+    Parameters
+    ----------
+    - df (pd.DataFrame) : The input data that contains the columns to be processed
+    - columns (list) : A list of columns names (str) to be processed
+    Returns
+    -------
+    - df (pd.DataFrame) : The modified dataframe 
+    '''
+    df[columns] = df[columns].fillna(0).replace('', 0)
 
-#     for column in columns:
-#         df[column] = df[column].apply(
-#             lambda x: max(map(int, x.split(';'))) if isinstance(x, str) and ';' in x else int(x)
-#         )
+    for column in columns:
+        df[column] = df[column].apply(
+            lambda x: max(map(int, x.split(';'))) if isinstance(x, str) and ';' in x else int(x)
+        )
     
-#     for column in columns:
-#         df[column] = pd.to_numeric(df[column], errors='coerce')  
+    for column in columns:
+        df[column] = pd.to_numeric(df[column], errors='coerce')  
 
-#     return df
-
-
-# def preProcFus(datafile, readfilt, entrfile):
-#     '''
-#     Preprocesses the fusion input data and formats it for CBioPortal output. 
-#     Parameters
-#     -----------
-#     - datafile (str) : Path to the input fusion data file
-#     - readfilt (int) : Minimum number of reads for fusion calls
-#     - entrfilw (str) : Path to the Entrez gene ID file
-#     Returns
-#     --------
-#     - df_cbio (pd.DataFrame) : Processed and formatted data
-#     '''
-#     data = pd.read_csv(datafile, sep="\t")
-#     entr = pd.read_csv(entrfile, sep="\t")
-
-#     # reformat the filtering columns to split and take the max value within cell
-#     columns = ['contig_remapped_reads', 'flanking_pairs', 'break1_split_reads', 'break2_split_reads', 'linking_split_reads']
-#     data = split_column_take_max(data, columns)
-
-#     # add a column which pulls the correct read support column    
-#     data['read_support'] = data.apply(
-#     lambda row: row['contig_remapped_reads'] if 'contig' in row['call_method'] 
-#     else row['flanking_pairs'] if 'flanking reads' in row['call_method'] 
-#     else (row['break1_split_reads'] + row['break2_split_reads'] + row['linking_split_reads']) if 'split reads' in row['call_method'] 
-#     else 0, 
-#     axis=1)
-
-#     # filter by minimum read support
-#     data = data[data['read_support'] > readfilt]
-
-#     # sort descending read support 
-#     data = data.sort_values(by='read_support', ascending=False)
-
-#     # get unique fusions for each sample
-#     data['gene1_aliases'] = data['gene1_aliases'].fillna('')
-#     data['gene2_aliases'] = data['gene2_aliases'].fillna('')
-
-#     data['fusion_tuples'] = data.apply(
-#     lambda row: '-'.join(sorted([str(x) if x else 'None' for x in [row['gene1_aliases'], row['gene2_aliases']]])), axis=1)
-
-#     # add index which is sample, tuple
-#     data['index'] = data['Sample'] + data['fusion_tuples']
-
-#     # deduplicate
-#     data_dedup = data.drop_duplicates(subset='index', keep='first')
-
-#     # gene1 should not equal gene2
-#     data_dedup = data_dedup[data_dedup['gene1_aliases'] != data_dedup['gene2_aliases']]
-
-#     # merge in entrez gene ids
-#     data_dedup = pd.merge(data_dedup, entr, how='left', left_on='gene1_aliases', right_on='Hugo_Symbol')
-#     data_dedup = pd.merge(data_dedup, entr, how='left', left_on='gene2_aliases', right_on='Hugo_Symbol', suffixes=('.x', '.y'))
-
-#     # add some missing columns
-#     data_dedup['DNA_support'] = 'no'
-#     data_dedup['RNA_support'] = 'yes'
-#     data_dedup['Center'] = 'TGL'
-#     data_dedup['Frame'] = 'frameshift'
-#     data_dedup['Fusion_Status'] = 'unknown'
-
-#     # write out the nice header 
-#     header = ['Hugo_Symbol', 'Entrez_Gene_Id', 'Center', 'Tumor_Sample_Barcode', 'Fusion', 'DNA_support', 'RNA_support', 'Method', 'Frame', 'Fusion_Status']
-
-#     # get left gene data
-#     col_left = ['gene1_aliases', 'Entrez_Gene_Id.x', 'Center', 'Sample', 'fusion_tuples', 'DNA_support', 'RNA_support', 'tools', 'Frame', 'Fusion_Status']
-#     data_left = data_dedup[col_left]
-#     data_left.columns = header
-
-#     # get right gene data
-#     col_right = ['gene2_aliases', 'Entrez_Gene_Id.y', 'Center', 'Sample', 'fusion_tuples', 'DNA_support', 'RNA_support', 'tools', 'Frame', 'Fusion_Status']
-#     data_right = data_dedup[col_right]
-#     data_right.columns = header
-
-#     data_left.loc[:, 'Hugo_Symbol'] = data_left['Hugo_Symbol'].replace("", float('nan')).fillna(data_right['Hugo_Symbol'])
-#     data_left.loc[:, 'Entrez_Gene_Id'] = data_left['Entrez_Gene_Id'].fillna(data_right['Entrez_Gene_Id'])
-#     data_right.loc[:, 'Hugo_Symbol'] = data_right['Hugo_Symbol'].replace("", float('nan')).fillna(data_left['Hugo_Symbol'])
-#     data_right.loc[:, 'Entrez_Gene_Id'] = data_right['Entrez_Gene_Id'].fillna(data_left['Entrez_Gene_Id'])
-
-#     # append it all together
-#     df_cbio = pd.concat([data_left, data_right])
-#     df_cbio['Entrez_Gene_Id'] = df_cbio['Entrez_Gene_Id'].astype(int)
-
-#     # remove rows where gene is not known (this still keeps the side of the gene which is known)
-#     df_cbio = df_cbio.dropna()
-
-#     return df_cbio
+    return df
 
 
+def preProcFus(datafile, readfilt, entrfile):
+    '''
+    Preprocesses the fusion input data and formats it for CBioPortal output. 
+    Parameters
+    -----------
+    - datafile (str) : Path to the input fusion data file
+    - readfilt (int) : Minimum number of reads for fusion calls
+    - entrfilw (str) : Path to the Entrez gene ID file
+    Returns
+    --------
+    - df_cbio (pd.DataFrame) : Processed and formatted data
+    '''
+    data = pd.read_csv(datafile, sep="\t")
+    entr = pd.read_csv(entrfile, sep="\t")
 
-# def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
-#     '''
-#     Processes CNA data by applying thresholds and performing gene-level segmentation.
-#     Parameters
-#     ----------
-#     - segfile (str) : Path to the input concatenated segmentation file from Sequenza
-#     - genebed (str) : Path to a tab-delimited bed file defining the genomic positions of canonical genes
-#     - gain (float) : Threshold for gains in CNA data
-#     - amp (float) : Threshold for amplification in CNA data
-#     - htz (float) : Threshold for heterozygous deletion in CNA data
-#     - hmz (float) : Threshold for homozygous deletion in CNA data
-#     - oncolist (str) : Path to a tab-delimited file containing the list of cancer genes
-#     - genelist (str or None) : (Optional) Path to a file containing a list of Hugo Symbols to filter the genes, or None if no filtering is required
-#     Returns
-#     -------
-#     - segData (pd.DataFrame) : Dataframe containing the processed segmentation data
-#     - df_cna (pd.DataFrame) : Dataframe with gene-level log2 copy number alterations
-#     - df_cna_thresh (pd.DataFrame) : Dataframe with thresholded CNA values (5-state matrix)
-#     '''
-#     # check if genelist is None when preProcCNA.py is called by pycbio.py and genelist is omitted
-#     if genelist:
-#         print('genelist is used during CNA processing')
-#     else:
-#         print('genelist is not used during CNA processing')
+    # reformat the filtering columns to split and take the max value within cell
+    columns = ['contig_remapped_reads', 'flanking_pairs', 'break1_split_reads', 'break2_split_reads', 'linking_split_reads']
+    data = split_column_take_max(data, columns)
+
+    # add a column which pulls the correct read support column    
+    data['read_support'] = data.apply(
+    lambda row: row['contig_remapped_reads'] if 'contig' in row['call_method'] 
+    else row['flanking_pairs'] if 'flanking reads' in row['call_method'] 
+    else (row['break1_split_reads'] + row['break2_split_reads'] + row['linking_split_reads']) if 'split reads' in row['call_method'] 
+    else 0, 
+    axis=1)
+
+    # filter by minimum read support
+    data = data[data['read_support'] > readfilt]
+
+    # sort descending read support 
+    data = data.sort_values(by='read_support', ascending=False)
+
+    # get unique fusions for each sample
+    data['gene1_aliases'] = data['gene1_aliases'].fillna('')
+    data['gene2_aliases'] = data['gene2_aliases'].fillna('')
+
+    data['fusion_tuples'] = data.apply(
+    lambda row: '-'.join(sorted([str(x) if x else 'None' for x in [row['gene1_aliases'], row['gene2_aliases']]])), axis=1)
+
+    # add index which is sample, tuple
+    data['index'] = data['Sample'] + data['fusion_tuples']
+
+    # deduplicate
+    data_dedup = data.drop_duplicates(subset='index', keep='first')
+
+    # gene1 should not equal gene2
+    data_dedup = data_dedup[data_dedup['gene1_aliases'] != data_dedup['gene2_aliases']]
+
+    # merge in entrez gene ids
+    data_dedup = pd.merge(data_dedup, entr, how='left', left_on='gene1_aliases', right_on='Hugo_Symbol')
+    data_dedup = pd.merge(data_dedup, entr, how='left', left_on='gene2_aliases', right_on='Hugo_Symbol', suffixes=('.x', '.y'))
+
+    # add some missing columns
+    data_dedup['DNA_support'] = 'no'
+    data_dedup['RNA_support'] = 'yes'
+    data_dedup['Center'] = 'TGL'
+    data_dedup['Frame'] = 'frameshift'
+    data_dedup['Fusion_Status'] = 'unknown'
+
+    # write out the nice header 
+    header = ['Hugo_Symbol', 'Entrez_Gene_Id', 'Center', 'Tumor_Sample_Barcode', 'Fusion', 'DNA_support', 'RNA_support', 'Method', 'Frame', 'Fusion_Status']
+
+    # get left gene data
+    col_left = ['gene1_aliases', 'Entrez_Gene_Id.x', 'Center', 'Sample', 'fusion_tuples', 'DNA_support', 'RNA_support', 'tools', 'Frame', 'Fusion_Status']
+    data_left = data_dedup[col_left]
+    data_left.columns = header
+
+    # get right gene data
+    col_right = ['gene2_aliases', 'Entrez_Gene_Id.y', 'Center', 'Sample', 'fusion_tuples', 'DNA_support', 'RNA_support', 'tools', 'Frame', 'Fusion_Status']
+    data_right = data_dedup[col_right]
+    data_right.columns = header
+
+    data_left.loc[:, 'Hugo_Symbol'] = data_left['Hugo_Symbol'].replace("", float('nan')).fillna(data_right['Hugo_Symbol'])
+    data_left.loc[:, 'Entrez_Gene_Id'] = data_left['Entrez_Gene_Id'].fillna(data_right['Entrez_Gene_Id'])
+    data_right.loc[:, 'Hugo_Symbol'] = data_right['Hugo_Symbol'].replace("", float('nan')).fillna(data_left['Hugo_Symbol'])
+    data_right.loc[:, 'Entrez_Gene_Id'] = data_right['Entrez_Gene_Id'].fillna(data_left['Entrez_Gene_Id'])
+
+    # append it all together
+    df_cbio = pd.concat([data_left, data_right])
+    df_cbio['Entrez_Gene_Id'] = df_cbio['Entrez_Gene_Id'].astype(int)
+
+    # remove rows where gene is not known (this still keeps the side of the gene which is known)
+    df_cbio = df_cbio.dropna()
+
+    return df_cbio
+
+
+
+def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
+    '''
+    Processes CNA data by applying thresholds and performing gene-level segmentation.
+    Parameters
+    ----------
+    - segfile (str) : Path to the input concatenated segmentation file from Sequenza
+    - genebed (str) : Path to a tab-delimited bed file defining the genomic positions of canonical genes
+    - gain (float) : Threshold for gains in CNA data
+    - amp (float) : Threshold for amplification in CNA data
+    - htz (float) : Threshold for heterozygous deletion in CNA data
+    - hmz (float) : Threshold for homozygous deletion in CNA data
+    - oncolist (str) : Path to a tab-delimited file containing the list of cancer genes
+    - genelist (str or None) : (Optional) Path to a file containing a list of Hugo Symbols to filter the genes, or None if no filtering is required
+    Returns
+    -------
+    - segData (pd.DataFrame) : Dataframe containing the processed segmentation data
+    - df_cna (pd.DataFrame) : Dataframe with gene-level log2 copy number alterations
+    - df_cna_thresh (pd.DataFrame) : Dataframe with thresholded CNA values (5-state matrix)
+    '''
+    # check if genelist is None when preProcCNA.py is called by pycbio.py and genelist is omitted
+    if genelist:
+        print('genelist is used during CNA processing')
+    else:
+        print('genelist is not used during CNA processing')
         
     
-#     # read oncogenes
-#     oncogenes = pd.read_csv(oncolist, sep='\t')
+    # read oncogenes
+    oncogenes = pd.read_csv(oncolist, sep='\t')
 
-#     # small fix segmentation data
-#     segData = pd.read_csv(segfile, sep='\t')
-#     segData['chrom'] = segData['chrom'].str.replace('chr', '')
+    # small fix segmentation data
+    segData = pd.read_csv(segfile, sep='\t')
+    segData['chrom'] = segData['chrom'].str.replace('chr', '')
 
-#     # remove NA
-#     segData.dropna(inplace=True)
+    # remove NA
+    segData.dropna(inplace=True)
 
-#     # convert pandas dataframe to R dataframe 
-#     segData_r = pandas2ri.py2rpy(segData)
+    # convert pandas dataframe to R dataframe 
+    segData_r = pandas2ri.py2rpy(segData)
 
-#     # set thresholds
-#     print('setting thresholds')
-#     gain = float(gain)
-#     amp = float(amp)
-#     htz = float(htz)
-#     hmz = float(hmz)
+    # set thresholds
+    print('setting thresholds')
+    gain = float(gain)
+    amp = float(amp)
+    htz = float(htz)
+    hmz = float(hmz)
 
-#     # get the gene info
-#     print('getting gene info')
-#     geneInfo = pd.read_csv(genebed, sep='\t')
+    # get the gene info
+    print('getting gene info')
+    geneInfo = pd.read_csv(genebed, sep='\t')
 
-#     # convert pandas dataframe to R dataframe 
-#     geneInfo_r = pandas2ri.py2rpy(geneInfo)
+    # convert pandas dataframe to R dataframe 
+    geneInfo_r = pandas2ri.py2rpy(geneInfo)
 
-#     # make CN matrix gene level
-#     print('converting seg')
-#     cnseg = cntools.CNSeg(segData_r)
-#     print('get segmentation by gene')
-#     rdByGene = cntools.getRS(cnseg, by='gene', imput=False, XY=False, geneMap=geneInfo_r, what='median', mapChrom='chrom', mapStart='start', mapEnd='end')
-#     print('get reduced segmentation data')
-#     reducedseg_df = cntools.rs(rdByGene)
+    # make CN matrix gene level
+    print('converting seg')
+    cnseg = cntools.CNSeg(segData_r)
+    print('get segmentation by gene')
+    rdByGene = cntools.getRS(cnseg, by='gene', imput=False, XY=False, geneMap=geneInfo_r, what='median', mapChrom='chrom', mapStart='start', mapEnd='end')
+    print('get reduced segmentation data')
+    reducedseg_df = cntools.rs(rdByGene)
 
-#     # convert data from R back to Py
-#     reducedseg = pandas2ri.rpy2py(reducedseg_df)
+    # convert data from R back to Py
+    reducedseg = pandas2ri.rpy2py(reducedseg_df)
 
-#     # some reformatting and return log2cna data
-#     df_cna = reducedseg.iloc[:, [4] + list(range(5, reducedseg.shape[1]))]
-#     df_cna = df_cna.drop_duplicates(subset=[df_cna.columns[0]])
-#     df_cna.columns = ['Hugo_Symbol'] + list(df_cna.columns[1:])
+    # some reformatting and return log2cna data
+    df_cna = reducedseg.iloc[:, [4] + list(range(5, reducedseg.shape[1]))]
+    df_cna = df_cna.drop_duplicates(subset=[df_cna.columns[0]])
+    df_cna.columns = ['Hugo_Symbol'] + list(df_cna.columns[1:])
 
-#     # set thresholds and return 5-state matrix
-#     print('thresholding cnas')
-#     df_cna_thresh = df_cna.copy()
-#     df_cna_thresh.iloc[:, 1:] = df_cna_thresh.iloc[:, 1:].apply(pd.to_numeric)
+    # set thresholds and return 5-state matrix
+    print('thresholding cnas')
+    df_cna_thresh = df_cna.copy()
+    df_cna_thresh.iloc[:, 1:] = df_cna_thresh.iloc[:, 1:].apply(pd.to_numeric)
 
-#     # threshold data
-#     for col in df_cna_thresh.columns[1:]:
-#         df_cna_thresh[col] = df_cna_thresh[col].apply(lambda x: 2 if x > amp
-#                                                 else (-2 if x < hmz
-#                                                       else (1 if gain < x <= amp
-#                                                             else (-1 if hmz <= x < htz
-#                                                                   else 0)
-#                                                         )
-#                                                     )
-#                                                 )
+    # threshold data
+    for col in df_cna_thresh.columns[1:]:
+        df_cna_thresh[col] = df_cna_thresh[col].apply(lambda x: 2 if x > amp
+                                                else (-2 if x < hmz
+                                                      else (1 if gain < x <= amp
+                                                            else (-1 if hmz <= x < htz
+                                                                  else 0)
+                                                        )
+                                                    )
+                                                )
     
-#     # fix rownames of log2cna data
-#     df_cna.set_index('Hugo_Symbol', inplace=True)
-#     df_cna = df_cna.round(4)
-#     df_cna_thresh.set_index(df_cna_thresh.columns[0], inplace=True)
+    # fix rownames of log2cna data
+    df_cna.set_index('Hugo_Symbol', inplace=True)
+    df_cna = df_cna.round(4)
+    df_cna_thresh.set_index(df_cna_thresh.columns[0], inplace=True)
 
-#     # subset of oncoKB genes
-#     df_cna_thresh_onco = df_cna_thresh.loc[df_cna_thresh.index.isin(oncogenes.index)]
+    # subset of oncoKB genes
+    df_cna_thresh_onco = df_cna_thresh.loc[df_cna_thresh.index.isin(oncogenes.index)]
 
-#     # subset if gene list is given
-#     if genelist is not None:
-#         with open(genelist, 'r') as file:
-#             keep_genes = [line.strip() for line in file]
+    # subset if gene list is given
+    if genelist is not None:
+        with open(genelist, 'r') as file:
+            keep_genes = [line.strip() for line in file]
             
-#         df_cna = df_cna.loc[df_cna.index.isin(keep_genes)]
-#         df_cna_thresh = df_cna_thresh.loc[df_cna_thresh.index.isin(keep_genes)]
+        df_cna = df_cna.loc[df_cna.index.isin(keep_genes)]
+        df_cna_thresh = df_cna_thresh.loc[df_cna_thresh.index.isin(keep_genes)]
       
-#     return segData, df_cna, df_cna_thresh
+    return segData, df_cna, df_cna_thresh
 
 
 
-# def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
-#     '''
-#     Adds a VAF column to a MAF DataFrame.
-#     Parameters
-#     ----------
-#     - maf_df (pd.DataFrame): The MAF DataFrame containing mutation data.
-#     - alt_col (str): The name of the column representing the alternate allele count.
-#     - dep_col (str): The name of the column representing the depth. 
-#     - vaf_header (str): The name for the new column that will hold the VAF values.
-#     Returns
-#     -------
-#     - maf_df (pd.DataFrame) : The modified dataframe with the VAF column. 
-#     '''
-#     # print a warning if any values are missing (shouldn't happen), but change them to 0
-#     if maf_df[alt_col].isnull().any() or maf_df[dep_col].isnull().any():
-#         print('Warning! Missing values found in one of the count columns')
-#         maf_df[alt_col] = maf_df[alt_col].fillna(0)
-#         maf_df[dep_col] = maf_df[dep_col].fillna(0)
+def addVAFtoMAF(maf_df, alt_col, dep_col, vaf_header):
+    '''
+    Adds a VAF column to a MAF DataFrame.
+    Parameters
+    ----------
+    - maf_df (pd.DataFrame): The MAF DataFrame containing mutation data.
+    - alt_col (str): The name of the column representing the alternate allele count.
+    - dep_col (str): The name of the column representing the depth. 
+    - vaf_header (str): The name for the new column that will hold the VAF values.
+    Returns
+    -------
+    - maf_df (pd.DataFrame) : The modified dataframe with the VAF column. 
+    '''
+    # print a warning if any values are missing (shouldn't happen), but change them to 0
+    if maf_df[alt_col].isnull().any() or maf_df[dep_col].isnull().any():
+        print('Warning! Missing values found in one of the count columns')
+        maf_df[alt_col] = maf_df[alt_col].fillna(0)
+        maf_df[dep_col] = maf_df[dep_col].fillna(0)
     
-#     # ensure factors end up as numeric
-#     maf_df[alt_col] = pd.to_numeric(maf_df[alt_col], errors='coerce')
-#     maf_df[dep_col] = pd.to_numeric(maf_df[dep_col], errors='coerce')
+    # ensure factors end up as numeric
+    maf_df[alt_col] = pd.to_numeric(maf_df[alt_col], errors='coerce')
+    maf_df[dep_col] = pd.to_numeric(maf_df[dep_col], errors='coerce')
 
-#     # ensure position comes after alternate count field 
-#     bspot = maf_df.columns.get_loc(alt_col)
-#     maf_df.insert(bspot + 1, vaf_header, maf_df[alt_col] / maf_df[dep_col])
+    # ensure position comes after alternate count field 
+    bspot = maf_df.columns.get_loc(alt_col)
+    maf_df.insert(bspot + 1, vaf_header, maf_df[alt_col] / maf_df[dep_col])
 
-#     # check for any NAs
-#     if maf_df[vaf_header].isnull().any():
-#         print('Warning! There are missing values in the new vaf column')
-#         maf_df[vaf_header] = maf_df[vaf_header].fillna(0)
+    # check for any NAs
+    if maf_df[vaf_header].isnull().any():
+        print('Warning! There are missing values in the new vaf column')
+        maf_df[vaf_header] = maf_df[vaf_header].fillna(0)
     
-#     return maf_df
+    return maf_df
     
 
-# def procVEP(datafile):
-#     '''
-#     Processes the input MAF file, adding various computed columns, and applying multiple filters to prepare the data for further analysis.
-#     Parameters
-#     ----------
-#     - datafile (str): The file path to the input in tab-separated format.
-#     Returns
-#     -------
-#     - df_anno (pd.DataFrame) : The modified dataframe. 
-#     '''
-#     print("--- reading data ---")
-#     data = pd.read_csv(datafile, sep="\t")
+def procVEP(datafile):
+    '''
+    Processes the input MAF file, adding various computed columns, and applying multiple filters to prepare the data for further analysis.
+    Parameters
+    ----------
+    - datafile (str): The file path to the input in tab-separated format.
+    Returns
+    -------
+    - df_anno (pd.DataFrame) : The modified dataframe. 
+    '''
+    print("--- reading data ---")
+    data = pd.read_csv(datafile, sep="\t")
 
-#     print('--- doing some formatting ---')
+    print('--- doing some formatting ---')
 
-#     # add vaf columns 
-#     print('add tumor_vaf')
-#     data = addVAFtoMAF(data, 't_alt_count', 't_depth', 'tumor_vaf')
-#     print('add normal_vaf')
-#     data = addVAFtoMAF(data, 'n_alt_count', 'n_depth', 'normal_vaf')
+    # add vaf columns 
+    print('add tumor_vaf')
+    data = addVAFtoMAF(data, 't_alt_count', 't_depth', 'tumor_vaf')
+    print('add normal_vaf')
+    data = addVAFtoMAF(data, 'n_alt_count', 'n_depth', 'normal_vaf')
 
-#     # clear memory (important when the mafs are huge with millions and millions of lines)
-#     df_anno = data
-#     del data
-#     gc.collect()
+    # clear memory (important when the mafs are huge with millions and millions of lines)
+    df_anno = data
+    del data
+    gc.collect()
 
-#     # add oncogenic yes or no columns 
-#     print('add oncogenic status')
-#     df_anno['oncogenic_binary'] = df_anno['oncogenic'].apply(lambda x: 'YES' if x in ['Oncogenic', 'Likely Oncogenic'] else 'NO')
+    # add oncogenic yes or no columns 
+    print('add oncogenic status')
+    df_anno['oncogenic_binary'] = df_anno['oncogenic'].apply(lambda x: 'YES' if x in ['Oncogenic', 'Likely Oncogenic'] else 'NO')
 
-#     # add common_variant yes or no columns
-#     df_anno['ExAC_common'] = df_anno['FILTER'].apply(lambda x: 'YES' if 'common_variant' in x else 'NO')
+    # add common_variant yes or no columns
+    df_anno['ExAC_common'] = df_anno['FILTER'].apply(lambda x: 'YES' if 'common_variant' in x else 'NO')
 
-#     # add POPMAX yes or no columns 
-#     print('add population level frequency')
-#     gnomad_cols = ['gnomAD_AFR_AF', 'gnomAD_AMR_AF', 'gnomAD_ASJ_AF', 'gnomAD_EAS_AF', 'gnomAD_FIN_AF', 'gnomAD_NFE_AF', 'gnomAD_OTH_AF', 'gnomAD_SAS_AF']
-#     df_anno[gnomad_cols] = df_anno[gnomad_cols].fillna(0)
-#     df_anno['gnomAD_AF_POPMAX'] = df_anno[gnomad_cols].max(axis=1)
+    # add POPMAX yes or no columns 
+    print('add population level frequency')
+    gnomad_cols = ['gnomAD_AFR_AF', 'gnomAD_AMR_AF', 'gnomAD_ASJ_AF', 'gnomAD_EAS_AF', 'gnomAD_FIN_AF', 'gnomAD_NFE_AF', 'gnomAD_OTH_AF', 'gnomAD_SAS_AF']
+    df_anno[gnomad_cols] = df_anno[gnomad_cols].fillna(0)
+    df_anno['gnomAD_AF_POPMAX'] = df_anno[gnomad_cols].max(axis=1)
 
-#     # caller artifact filters 
-#     print('apply filters')
-#     df_anno['FILTER'] = df_anno['FILTER'].replace('clustered_events', 'PASS')
-#     df_anno['FILTER'] = df_anno['FILTER'].replace('common_variant', 'PASS')
+    # caller artifact filters 
+    print('apply filters')
+    df_anno['FILTER'] = df_anno['FILTER'].replace('clustered_events', 'PASS')
+    df_anno['FILTER'] = df_anno['FILTER'].replace('common_variant', 'PASS')
 
-#     # some specific filter flags should be rescued if oncogenic (i.e. EGFR had issues here)
-#     print("rescue filter flags if oncogenic")
-#     df_anno['FILTER'] = df_anno.apply(
-#         lambda row: 'PASS' if row['oncogenic_binary'] == 'YES' and row['FILTER'] in ['triallelic_site', 'clustered_events;triallelic_site', 'clustered_events;homologous_mapping_event'] else row['FILTER'],
-#         axis=1
-#     )
+    # some specific filter flags should be rescued if oncogenic (i.e. EGFR had issues here)
+    print("rescue filter flags if oncogenic")
+    df_anno['FILTER'] = df_anno.apply(
+        lambda row: 'PASS' if row['oncogenic_binary'] == 'YES' and row['FILTER'] in ['triallelic_site', 'clustered_events;triallelic_site', 'clustered_events;homologous_mapping_event'] else row['FILTER'],
+        axis=1
+    )
 
-#     # Artifact Filter
-#     print('artifact filter')
-#     df_anno['TGL_FILTER_ARTIFACT'] = df_anno['FILTER'].apply(lambda x: 'PASS' if x == 'PASS' else 'Artifact')
+    # Artifact Filter
+    print('artifact filter')
+    df_anno['TGL_FILTER_ARTIFACT'] = df_anno['FILTER'].apply(lambda x: 'PASS' if x == 'PASS' else 'Artifact')
 
-#     # ExAC Filter
-#     print('exac filter')
-#     df_anno['TGL_FILTER_ExAC'] = df_anno.apply(
-#         lambda row: 'ExAC_common' if row['ExAC_common'] == 'YES' and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
-#         axis=1
-#     )
+    # ExAC Filter
+    print('exac filter')
+    df_anno['TGL_FILTER_ExAC'] = df_anno.apply(
+        lambda row: 'ExAC_common' if row['ExAC_common'] == 'YES' and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
+        axis=1
+    )
 
-#     # gnomAD_AF_POPMAX Filter
-#     print('population frequency filter')
-#     df_anno['TGL_FILTER_gnomAD'] = df_anno.apply(
-#         lambda row: 'gnomAD_common' if row['gnomAD_AF_POPMAX'] > 0.001 and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
-#         axis=1
-#     )
+    # gnomAD_AF_POPMAX Filter
+    print('population frequency filter')
+    df_anno['TGL_FILTER_gnomAD'] = df_anno.apply(
+        lambda row: 'gnomAD_common' if row['gnomAD_AF_POPMAX'] > 0.001 and row['Matched_Norm_Sample_Barcode'] == 'unmatched' else 'PASS',
+        axis=1
+    )
 
-#     # VAF Filter
-#     print('VAF Filter')
-#     df_anno['TGL_FILTER_VAF'] = df_anno.apply(
-#         lambda row: 'PASS' if row['tumor_vaf'] >= 0.1 or 
-#         (row['tumor_vaf'] < 0.1 and row['oncogenic_binary'] == 'YES' and 
-#          ((row['Variant_Classification'] in ['In_Frame_Del', 'In_Frame_Ins']) or 
-#           row['Variant_Type'] == 'SNP')) 
-#         else 'low_VAF', axis=1
-#     )
+    # VAF Filter
+    print('VAF Filter')
+    df_anno['TGL_FILTER_VAF'] = df_anno.apply(
+        lambda row: 'PASS' if row['tumor_vaf'] >= 0.1 or 
+        (row['tumor_vaf'] < 0.1 and row['oncogenic_binary'] == 'YES' and 
+         ((row['Variant_Classification'] in ['In_Frame_Del', 'In_Frame_Ins']) or 
+          row['Variant_Type'] == 'SNP')) 
+        else 'low_VAF', axis=1
+    )
 
-#     # Mark filters 
-#     print('Mark filters')
-#     df_anno['TGL_FILTER_VERDICT'] = df_anno.apply(
-#         lambda row: 'PASS' if row['TGL_FILTER_ARTIFACT'] == 'PASS' and 
-#                           row['TGL_FILTER_ExAC'] == 'PASS' and 
-#                           row['TGL_FILTER_gnomAD'] == 'PASS' and 
-#                           row['TGL_FILTER_VAF'] == 'PASS' 
-#                   else ';'.join([row['TGL_FILTER_ARTIFACT'], row['TGL_FILTER_ExAC'], 
-#                                  row['TGL_FILTER_gnomAD'], row['TGL_FILTER_VAF']]), axis=1
-#     )
+    # Mark filters 
+    print('Mark filters')
+    df_anno['TGL_FILTER_VERDICT'] = df_anno.apply(
+        lambda row: 'PASS' if row['TGL_FILTER_ARTIFACT'] == 'PASS' and 
+                          row['TGL_FILTER_ExAC'] == 'PASS' and 
+                          row['TGL_FILTER_gnomAD'] == 'PASS' and 
+                          row['TGL_FILTER_VAF'] == 'PASS' 
+                  else ';'.join([row['TGL_FILTER_ARTIFACT'], row['TGL_FILTER_ExAC'], 
+                                 row['TGL_FILTER_gnomAD'], row['TGL_FILTER_VAF']]), axis=1
+    )
 
-#     return df_anno
-
-
+    return df_anno
 
 
-# def readGep(gepfile):
-#     '''
-#     Reads in a sample study file and returns a list of sample names or IDs.
-#     Parameters
-#     ----------
-#     - gepfile (str): Path to the sample study file.
-#     Returns
-#     -------
-#     - study_samples (list): List of sample names or IDs.
-#     '''
-#     study_samples = []
-#     with open(gepfile, 'r') as file:
-#         study_samples = [line.strip() for line in file]
-
-#     return study_samples
 
 
-# def preProcRNA(fpkmfile, enscon, genelist=None):
-#     '''
-#     Preprocesses RNA expression data by merging with gene symbol annotations, optionally subsetting by a gene list.
-#     Parameters
-#     ----------
-#     - fpkmfile (str): Path to the input concatenated FPKM data from RSEM workflow.
-#     - enscon (str): Path to a tab-delimited file with ENSEMBLE gene ID and Hugo_Symbol.
-#     - genelist (str, optional): Path to a file with list of Hugo Symbols to report in the final results. Default is None.
-#     Returns
-#     -------
-#     - df (pd.DataFrame): Preprocessed DataFrame with gene expression data.
-#     '''
-#     # check if genelist is None when preProcRNA.py is called by pycbio.py and genelist is omitted
-#     if genelist:
-#         print('genelist is used during RNA processing')
-#     else:
-#         print('genelist is not used during RNA processing')
+def readGep(gepfile):
+    '''
+    Reads in a sample study file and returns a list of sample names or IDs.
+    Parameters
+    ----------
+    - gepfile (str): Path to the sample study file.
+    Returns
+    -------
+    - study_samples (list): List of sample names or IDs.
+    '''
+    study_samples = []
+    with open(gepfile, 'r') as file:
+        study_samples = [line.strip() for line in file]
+
+    return study_samples
+
+
+def preProcRNA(fpkmfile, enscon, genelist=None):
+    '''
+    Preprocesses RNA expression data by merging with gene symbol annotations, optionally subsetting by a gene list.
+    Parameters
+    ----------
+    - fpkmfile (str): Path to the input concatenated FPKM data from RSEM workflow.
+    - enscon (str): Path to a tab-delimited file with ENSEMBLE gene ID and Hugo_Symbol.
+    - genelist (str, optional): Path to a file with list of Hugo Symbols to report in the final results. Default is None.
+    Returns
+    -------
+    - df (pd.DataFrame): Preprocessed DataFrame with gene expression data.
+    '''
+    # check if genelist is None when preProcRNA.py is called by pycbio.py and genelist is omitted
+    if genelist:
+        print('genelist is used during RNA processing')
+    else:
+        print('genelist is not used during RNA processing')
         
-#     # read in data
-#     gep_data = pd.read_csv(fpkmfile, sep="\t")
-#     ens_conv = pd.read_csv(enscon, sep="\t", header=None)
+    # read in data
+    gep_data = pd.read_csv(fpkmfile, sep="\t")
+    ens_conv = pd.read_csv(enscon, sep="\t", header=None)
 
-#     # rename columns
-#     ens_conv.columns = ["gene_id", "Hugo_Symbol"]
+    # rename columns
+    ens_conv.columns = ["gene_id", "Hugo_Symbol"]
 
-#     # merge in Hugo's, re-order columns, deduplicate
-#     df = pd.merge(gep_data, ens_conv, on="gene_id", how="left")
-#     df = df.iloc[:, [-1] + list(range(1, df.shape[1] - 1))]
-#     df = df[~df.duplicated(subset=[df.columns[0]])]
+    # merge in Hugo's, re-order columns, deduplicate
+    df = pd.merge(gep_data, ens_conv, on="gene_id", how="left")
+    df = df.iloc[:, [-1] + list(range(1, df.shape[1] - 1))]
+    df = df[~df.duplicated(subset=[df.columns[0]])]
 
-#     df.set_index("Hugo_Symbol", inplace=True)
+    df.set_index("Hugo_Symbol", inplace=True)
 
-#     # subset if gene list is given
-#     if genelist is not None:
-#         with open(genelist, 'r') as file:
-#             keep_genes = [line.strip() for line in file]
+    # subset if gene list is given
+    if genelist is not None:
+        with open(genelist, 'r') as file:
+            keep_genes = [line.strip() for line in file]
 
-#         df = df[df.index.isin(keep_genes)]
+        df = df[df.index.isin(keep_genes)]
     
-#     # return the data frame
-#     return df
+    # return the data frame
+    return df
 
 
-# def compZ(df):
-#     '''
-#     Computes row-wise z-scores for a given DataFrame and fills NaN values with zero.
-#     Parameters
-#     ----------
-#     - df (pd.DataFrame): Input DataFrame with gene expression data.
-#     Returns
-#     -------
-#     - df_zscore (pd.DataFrame): DataFrame with z-scores for each gene.
-#     '''
-#     # scale row-wise
-#     df_zscore = df.apply(lambda x: (x - x.mean()) / x.std(), axis=1)
-#     df_zscore = df_zscore.fillna(0)
+def compZ(df):
+    '''
+    Computes row-wise z-scores for a given DataFrame and fills NaN values with zero.
+    Parameters
+    ----------
+    - df (pd.DataFrame): Input DataFrame with gene expression data.
+    Returns
+    -------
+    - df_zscore (pd.DataFrame): DataFrame with z-scores for each gene.
+    '''
+    # scale row-wise
+    df_zscore = df.apply(lambda x: (x - x.mean()) / x.std(), axis=1)
+    df_zscore = df_zscore.fillna(0)
 
-#     return df_zscore
+    return df_zscore
 
 
 
