@@ -19,15 +19,13 @@ import glob
 import zipfile
 import pandas as pd 
 import gc 
+import warnings
 from rpy2 import robjects 
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
+from rpy2.robjects.conversion import localconverter
 from scipy.stats import zscore
 
-import warnings
-
-
-pandas2ri.activate()
 cntools = importr('CNTools')
 
 
@@ -325,40 +323,38 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     # read oncogenes
     oncogenes = pd.read_csv(oncolist, sep='\t')
 
+    # set thresholds
+    print('setting thresholds')
+    gain, amp, htz, hmz = float(gain), float(amp), float(htz), float(hmz)
+
     # small fix segmentation data
     segData = pd.read_csv(segfile, sep='\t')
     segData['chrom'] = segData['chrom'].str.replace('chr', '')
-
     # remove NA
     segData.dropna(inplace=True)
-
-    # convert pandas dataframe to R dataframe 
-    segData_r = pandas2ri.py2rpy(segData)
-
-    # set thresholds
-    print('setting thresholds')
-    gain = float(gain)
-    amp = float(amp)
-    htz = float(htz)
-    hmz = float(hmz)
 
     # get the gene info
     print('getting gene info')
     geneInfo = pd.read_csv(genebed, sep='\t')
 
-    # convert pandas dataframe to R dataframe 
-    geneInfo_r = pandas2ri.py2rpy(geneInfo)
+    # convert pandas dataframes to R dataframes
+    with localconverter(robjects.default_converter + pandas2ri.converter):
+        segData_r = robjects.conversion.py2rpy(segData)
+        print('converted segData to R df')
+        geneInfo_r = robjects.conversion.py2rpy(geneInfo)
+        print('converted geneInfo to R df')
+        
+        # make CN matrix gene level
+        print('converting seg')
+        cnseg = cntools.CNSeg(segData_r)
+        print('get segmentation by gene')
+        rdByGene = cntools.getRS(cnseg, by='gene', imput=False, XY=False, geneMap=geneInfo_r, what='median', mapChrom='chrom', mapStart='start', mapEnd='end')
+        print('get reduced segmentation data')
+        reducedseg_df = cntools.rs(rdByGene)
 
-    # make CN matrix gene level
-    print('converting seg')
-    cnseg = cntools.CNSeg(segData_r)
-    print('get segmentation by gene')
-    rdByGene = cntools.getRS(cnseg, by='gene', imput=False, XY=False, geneMap=geneInfo_r, what='median', mapChrom='chrom', mapStart='start', mapEnd='end')
-    print('get reduced segmentation data')
-    reducedseg_df = cntools.rs(rdByGene)
-
-    # convert data from R back to Py
-    reducedseg = pandas2ri.rpy2py(reducedseg_df)
+        # convert data from R back to Py
+        reducedseg = robjects.conversion.rpy2py(reducedseg_df)    
+        print('converted reducedSegData back to pandas df')
 
     # some reformatting and return log2cna data
     df_cna = reducedseg.iloc[:, [4] + list(range(5, reducedseg.shape[1]))]
