@@ -43,7 +43,7 @@ def extract_files_from_map(mapfile, data_type):
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - data_type (str): File type to link in their respective folders.
                        Accepted values: maf, gep, fus, and seg
-    '''
+   '''
 
     # create input directories for each file type from map file    
     infile = open(mapfile)
