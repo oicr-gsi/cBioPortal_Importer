@@ -19,15 +19,13 @@ import glob
 import zipfile
 import pandas as pd 
 import gc 
+import warnings
 from rpy2 import robjects 
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
+from rpy2.robjects.conversion import localconverter
 from scipy.stats import zscore
 
-import warnings
-
-
-pandas2ri.activate()
 cntools = importr('CNTools')
 
 
@@ -43,7 +41,7 @@ def extract_files_from_map(mapfile, data_type):
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - data_type (str): File type to link in their respective folders.
                        Accepted values: maf, gep, fus, and seg
-   '''
+    '''
 
     # create input directories for each file type from map file    
     infile = open(mapfile)
@@ -325,40 +323,38 @@ def preProcCNA(segfile, genebed, gain, amp, htz, hmz, oncolist, genelist=None):
     # read oncogenes
     oncogenes = pd.read_csv(oncolist, sep='\t')
 
+    # set thresholds
+    print('setting thresholds')
+    gain, amp, htz, hmz = float(gain), float(amp), float(htz), float(hmz)
+
     # small fix segmentation data
     segData = pd.read_csv(segfile, sep='\t')
     segData['chrom'] = segData['chrom'].str.replace('chr', '')
-
     # remove NA
     segData.dropna(inplace=True)
-
-    # convert pandas dataframe to R dataframe 
-    segData_r = pandas2ri.py2rpy(segData)
-
-    # set thresholds
-    print('setting thresholds')
-    gain = float(gain)
-    amp = float(amp)
-    htz = float(htz)
-    hmz = float(hmz)
 
     # get the gene info
     print('getting gene info')
     geneInfo = pd.read_csv(genebed, sep='\t')
 
-    # convert pandas dataframe to R dataframe 
-    geneInfo_r = pandas2ri.py2rpy(geneInfo)
+    # convert pandas dataframes to R dataframes
+    with localconverter(robjects.default_converter + pandas2ri.converter):
+        segData_r = robjects.conversion.py2rpy(segData)
+        print('converted segData to R df')
+        geneInfo_r = robjects.conversion.py2rpy(geneInfo)
+        print('converted geneInfo to R df')
+        
+        # make CN matrix gene level
+        print('converting seg')
+        cnseg = cntools.CNSeg(segData_r)
+        print('get segmentation by gene')
+        rdByGene = cntools.getRS(cnseg, by='gene', imput=False, XY=False, geneMap=geneInfo_r, what='median', mapChrom='chrom', mapStart='start', mapEnd='end')
+        print('get reduced segmentation data')
+        reducedseg_df = cntools.rs(rdByGene)
 
-    # make CN matrix gene level
-    print('converting seg')
-    cnseg = cntools.CNSeg(segData_r)
-    print('get segmentation by gene')
-    rdByGene = cntools.getRS(cnseg, by='gene', imput=False, XY=False, geneMap=geneInfo_r, what='median', mapChrom='chrom', mapStart='start', mapEnd='end')
-    print('get reduced segmentation data')
-    reducedseg_df = cntools.rs(rdByGene)
-
-    # convert data from R back to Py
-    reducedseg = pandas2ri.rpy2py(reducedseg_df)
+        # convert data from R back to Py
+        reducedseg = robjects.conversion.rpy2py(reducedseg_df)    
+        print('converted reducedSegData back to pandas df')
 
     # some reformatting and return log2cna data
     df_cna = reducedseg.iloc[:, [4] + list(range(5, reducedseg.shape[1]))]
@@ -2023,6 +2019,7 @@ def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
        
     newfile.close()
 
+                
 def removed_filtered_data(outputfile, removed_things, header):
     '''
     (str, str, str)
@@ -2041,16 +2038,18 @@ def removed_filtered_data(outputfile, removed_things, header):
     #write header to outputfile
     for file_content in header:
         newfile.write(file_content+'\t')
+    #write mutations removed to file
     for line in removed_things:
         newfile.write('\n')
         for value in line.values():
             newfile.write(f"{value}\t")
-    
+
     newfile.close() 
-         
+
+
+
 def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants, removedfile):
-    
-   '''
+    '''
     (str, str, int, float, float, bool) -> (int, int)
     
     Writes records from maffile to outputfile if mutations pass depth, alt_freq and gnomAd_AF filters
@@ -2065,8 +2064,8 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     - alt_freq_filter (float): Minimum alternative allele frequency (t_alt_count / t_depth)
     - gnomAD_AF_filter (float): Maximum allele frequency is the Genome Aggregation Database
                                 if Matched_Norm_Sample_Barcode is unmatched
-    - keep_variants(bool): Keep variants with missing gnomAD_AF values when Matched_Norm_Sample_Barcode is unmatched if True 
-    - removedfile (str):
+    - keep_variants (bool): Keep variants with missing gnomAD_AF values when Matched_Norm_Sample_Barcode is unmatched if True 
+    - removedfile (str): file name for removed file
     '''
     
     # count the number of mutations before and after filtering
@@ -2078,16 +2077,17 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     
     # get file header
     header = infile.readline().rstrip('\n').split('\t')
-   
+    
     # write header to outputfile
     newfile.write('\t'.join(header) + '\n')
     
     # make a list of accepted mutations
     valid_mutations = ['Frame_Shift_Del',  'Frame_Shift_Ins', 'In_Frame_Del',
                           'In_Frame_Ins', 'Missense_Mutation', 'Nonsense_Mutation',
-                          'Nonstop_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site', 
+                          'Nonstop_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site',
                           "5'Flank", "Splie_Region", "Targeted_Region"]
-    exclude = ['str_contraction', 't_lod_fstar']   
+    exclude = ['str_contraction', 't_lod_fstar']    
+
     #ADDED TO SPEED UP SEARCHING
     h_s=header.index('Hugo_Symbol')
     chr_n=header.index('Chromosome')
@@ -2156,18 +2156,15 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                 line = line.split('\t')
                 removal_reason = 'non valid mutation; ' + line[var_c]
                 filtered_out_list.append({"hugo_symbol": line[h_s], "reason": f"{removal_reason}", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
-
             if newline:
                 newfile.write('\t'.join(newline) + '\n')
     newfile.close()
-    #must match with the keys
     header_list = ["hugo_symbol", "reason", "variant_type", "chr", "start_pos", "end_pos", "ref_allel", "tumor_bar"]
-    removed_filtered_data(removedfile, filtered_out_list, header_list)
+    removed_filtered_data(removedfile, filtered_out_list, header_list)                
+    return total, kept                
+  
 
-    return total, kept            
-        
-
-def remove_indels(maffile, outputfile, removedfile):
+def remove_indels(maffile, outputfile):
     '''
     (str, str) -> (int, int)
     
@@ -2179,15 +2176,17 @@ def remove_indels(maffile, outputfile, removedfile):
     ----------
     - maffile (str): Path to the maf file (unzipped)
     - outputfile (str): Path to the output file
-    - removedfile (str):
+    - removedfile (str): Name of removed file
     '''
-     # count the number of mutations before and after filtering
+    
+    # count the number of mutations before and after filtering
     total, kept = 0, 0
     
     # open files
     newfile = open(outputfile, 'w')
     infile = open(maffile)
     
+    # get file header
     header = infile.readline().rstrip().split('\t')
     
     # write header to outputfile
@@ -2205,8 +2204,7 @@ def remove_indels(maffile, outputfile, removedfile):
 
 
     filtered_out_list = []
-
-
+    
     for line in infile:
         # count total mutations
         total += 1
@@ -2220,15 +2218,15 @@ def remove_indels(maffile, outputfile, removedfile):
                 line = line.split('\t') 
                 removal_reason = 'INDEL; ' + line[var_c]
                 filtered_out_list.append({"hugo_symbol": line[h_s], "reason": f"{removal_reason}", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
-    
+
     newfile.close()
 
     header_list = ["hugo_symbol", "reason", "variant_type", "chr", "start_pos", "end_pos", "ref_allel", "tumor_bar"]
     removed_filtered_data(removedfile, filtered_out_list, header_list)
 
 
-    return total, kept 
-              
+    newfile.close()                
+    return total, kept                
 
 
 def process_fusion(fusfile, entcon, min_fusion_reads, ProcFusion, outdir):
@@ -3194,7 +3192,7 @@ def remove_samples_from_gepfile(gepfile, discarded_samples):
     
     Parameters
     ----------
-    - gepfile (str): Path to the concatenated gep file
+    - fusfile (str): Path to the concatenated fusion file
     - discarded_samples (list): List of samples to exclude
     '''
 
