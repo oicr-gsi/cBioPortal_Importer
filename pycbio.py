@@ -3545,7 +3545,7 @@ def make_import_folder(args):
             # unfiltered data
             df_cbio_anno.to_csv(os.path.join(suppdir, 'unfiltered_data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
         else:
-            df_cbio_filt = pd.read_csv(args.maffile, sep="\t", header=0)
+            df_cbio_filt = pd.read_csv(maffile, sep="\t", header=0)
             df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
             df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
 
