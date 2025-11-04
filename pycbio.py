@@ -112,7 +112,7 @@ def convert_purple_to_seg(somatic_file, purity, ploidy, sample_name):
     - ploidy (float): Ploidy estimated from purple
     '''
     
-    L = [['chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']]
+    L = [['ID', 'chrom', 'loc.start', 'loc.end', 'num.mark', 'seg.mean']]
     
     infile = open(somatic_file)
     header = infile.readline().rstrip().split('\t')
