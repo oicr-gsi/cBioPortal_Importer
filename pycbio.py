@@ -2057,7 +2057,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     Precondition: the maf file is unzipped.
     
     Parameters
-    ----------
+    ---------- 
     - maffile (str): Path to the maf file (unzipped)
     - outputfile (str): Path to the output file
     - depth_filter (int): Minimum number of reads at a given position
