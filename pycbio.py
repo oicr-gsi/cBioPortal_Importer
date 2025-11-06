@@ -2085,7 +2085,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     valid_mutations = ['Frame_Shift_Del',  'Frame_Shift_Ins', 'In_Frame_Del',
                           'In_Frame_Ins', 'Missense_Mutation', 'Nonsense_Mutation',
                           'Nonstop_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site',
-                          'Splie_Region', 'Targeted_Region', "5'Flank"]
+                          'Splice_Region', 'Targeted_Region', "5'Flank"]
     exclude = ['str_contraction', 't_lod_fstar']    
 
     #ADDED TO SPEED UP SEARCHING
