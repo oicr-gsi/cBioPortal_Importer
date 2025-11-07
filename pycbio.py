@@ -2097,6 +2097,7 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     var_c=header.index('Variant_Classification')
     var_t=header.index('Variant_Type')
     tum_bar=header.index('Tumor_Sample_Barcode')
+    tum_al=header.index('Allele')
 
     filtered_out_list = []
 
@@ -2119,31 +2120,36 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                     if line[header.index('t_alt_count')] and line[header.index('t_depth')]:
                         # filter based on ratio t_alt_count / t_depth
                         if int(line[header.index('t_alt_count')]) / int(line[header.index('t_depth')]) >= alt_freq_filter:
-                            # filter based on Matched_Norm_Sample_Barcode
-                            if line[header.index('Matched_Norm_Sample_Barcode')] == "unmatched":
-                                # check gnomAD_AF. field may be blank, check if value recorded
-                                try:
-                                    float(line[header.index('gnomAD_AF')])
-                                except:
-                                    # check if variants are kept or not
-                                    if keep_variants:
-                                        # variants are kept anyway when gnomAD_AF is not defined
-                                        newline = line
-                                        kept += 1
+                            #start
+                            if not (line[var_c] == "5'Flank" and line[h_s] != "TERT"):
+                                # filter based on Matched_Norm_Sample_Barcode
+                                if line[header.index('Matched_Norm_Sample_Barcode')] == "unmatched":
+                                    # check gnomAD_AF. field may be blank, check if value recorded
+                                    try:
+                                        float(line[header.index('gnomAD_AF')])
+                                    except:
+                                        # check if variants are kept or not
+                                        if keep_variants:
+                                            # variants are kept anyway when gnomAD_AF is not defined
+                                            newline = line
+                                            kept += 1
+                                        else:
+                                            # no value for gnomAD_AF, do not keep mutation
+                                            newline = ''
+                                            filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF has no value & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                                     else:
-                                        # no value for gnomAD_AF, do not keep mutation
-                                        newline = ''
-                                        filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF has no value & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+                                        # compare gnomAD_AF to folder
+                                        if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
+                                            newline = line
+                                            kept += 1
+                                        else:
+                                            filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF value to larger & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                                 else:
-                                    # compare gnomAD_AF to folder
-                                    if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
-                                        newline = line
-                                        kept += 1
-                                    else:
-                                        filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF value to larger & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+                                    newline = line
+                                    kept += 1
                             else:
-                                newline = line
-                                kept += 1
+                                filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "Hugo symbol and variant class error", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+                            #end
                         else:
                             filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "t_alt_count / t_depth", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                     else:
