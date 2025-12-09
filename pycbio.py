@@ -196,7 +196,11 @@ def split_column_take_max(df, columns):
 
     for column in columns:
         df[column] = df[column].apply(
-            lambda x: max(map(int, x.split(';'))) if isinstance(x, str) and ';' in x else int(x)
+            lambda x: (
+                max([int(t) if t.strip().lstrip('+-').isdigit() else 0 for t in str(x).split(';')])
+                if isinstance(x, str) and ';' in str(x)
+                else (0 if x is None or (isinstance(x, str) and x.strip().lower() in {'none', 'na', 'nan', 'null', ''}) else int(x))        
+            )
         )
     
     for column in columns:
@@ -285,7 +289,9 @@ def preProcFus(datafile, readfilt, entrfile):
 
     # append it all together
     df_cbio = pd.concat([data_left, data_right])
-    df_cbio['Entrez_Gene_Id'] = df_cbio['Entrez_Gene_Id'].astype(int)
+    df_cbio['Entrez_Gene_Id'] = (    
+        pd.to_numeric(df_cbio['Entrez_Gene_Id'], errors='coerce').fillna(0).astype(int)
+    )
 
     # remove rows where gene is not known (this still keeps the side of the gene which is known)
     df_cbio = df_cbio.dropna()
