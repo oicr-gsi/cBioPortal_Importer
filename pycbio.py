@@ -196,7 +196,10 @@ def split_column_take_max(df, columns):
 
     for column in columns:
         df[column] = df[column].apply(
-            lambda x: max(map(int, x.split(';'))) if isinstance(x, str) and ';' in x else int(x)
+             lambda x: (
+                max([int(t) if t.strip().lstrip('+-').isdigit() else 0 for t in str(x).split(';')])
+                if isinstance(x, str) and ';' in str(x)
+                else (0 if x is None or (isinstance(x, str) and x.strip().lower() in {'none', 'na', 'nan', 'null', ''}) else int(x)))        
         )
     
     for column in columns:
@@ -285,7 +288,9 @@ def preProcFus(datafile, readfilt, entrfile):
 
     # append it all together
     df_cbio = pd.concat([data_left, data_right])
-    df_cbio['Entrez_Gene_Id'] = df_cbio['Entrez_Gene_Id'].astype(int)
+    df_cbio['Entrez_Gene_Id'] = (    
+        pd.to_numeric(df_cbio['Entrez_Gene_Id'], errors='coerce').fillna(0).astype(int)
+    )
 
     # remove rows where gene is not known (this still keeps the side of the gene which is known)
     df_cbio = df_cbio.dropna()
@@ -2020,7 +2025,35 @@ def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
     newfile.close()
 
                 
-def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants):
+def removed_filtered_data(outputfile, removed_things, header):
+    '''
+    (str, str, str)
+    
+    Write a discription
+    
+    Parameters
+    ----------
+    - outputfile (str):
+    - removed_things (str):
+    - header (str):
+    '''
+    #open files
+    newfile = open(outputfile, 'w')
+    # get file header
+    #write header to outputfile
+    for file_content in header:
+        newfile.write(file_content+'\t')
+    #write mutations removed to file
+    for line in removed_things:
+        newfile.write('\n')
+        for value in line.values():
+            newfile.write(f"{value}\t")
+
+    newfile.close() 
+
+
+
+def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants, removedfile):
     '''
     (str, str, int, float, float, bool) -> (int, int)
     
@@ -2029,14 +2062,15 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     Precondition: the maf file is unzipped.
     
     Parameters
-    ----------
+    ---------- 
     - maffile (str): Path to the maf file (unzipped)
     - outputfile (str): Path to the output file
     - depth_filter (int): Minimum number of reads at a given position
     - alt_freq_filter (float): Minimum alternative allele frequency (t_alt_count / t_depth)
     - gnomAD_AF_filter (float): Maximum allele frequency is the Genome Aggregation Database
                                 if Matched_Norm_Sample_Barcode is unmatched
-    - keep_variants(bool): Keep variants with missing gnomAD_AF values when Matched_Norm_Sample_Barcode is unmatched if True 
+    - keep_variants (bool): Keep variants with missing gnomAD_AF values when Matched_Norm_Sample_Barcode is unmatched if True 
+    - removedfile (str): file name for removed file
     '''
     
     # count the number of mutations before and after filtering
@@ -2055,8 +2089,22 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
     # make a list of accepted mutations
     valid_mutations = ['Frame_Shift_Del',  'Frame_Shift_Ins', 'In_Frame_Del',
                           'In_Frame_Ins', 'Missense_Mutation', 'Nonsense_Mutation',
-                          'Nonstop_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site']
+                          'Nonstop_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site',
+                          'Splice_Region', 'Targeted_Region', "5'Flank"]
     exclude = ['str_contraction', 't_lod_fstar']    
+
+    #ADDED TO SPEED UP SEARCHING
+    h_s=header.index('Hugo_Symbol')
+    chr_n=header.index('Chromosome')
+    s_p=header.index('Start_Position')
+    e_p=header.index('End_Position')
+    ref_a=header.index('Reference_Allele')
+    var_c=header.index('Variant_Classification')
+    var_t=header.index('Variant_Type')
+    tum_bar=header.index('Tumor_Sample_Barcode')
+    tum_al=header.index('Allele')
+
+    filtered_out_list = []
 
     # apply maf filters to all mutations
     for line in infile:
@@ -2077,38 +2125,57 @@ def filter_mutations(maffile, outputfile, depth_filter, alt_freq_filter, gnomAD_
                     if line[header.index('t_alt_count')] and line[header.index('t_depth')]:
                         # filter based on ratio t_alt_count / t_depth
                         if int(line[header.index('t_alt_count')]) / int(line[header.index('t_depth')]) >= alt_freq_filter:
-                            # filter based on Matched_Norm_Sample_Barcode
-                            if line[header.index('Matched_Norm_Sample_Barcode')] == "unmatched":
-                                # check gnomAD_AF. field may be blank, check if value recorded
-                                try:
-                                    float(line[header.index('gnomAD_AF')])
-                                except:
-                                    # check if variants are kept or not
-                                    if keep_variants:
-                                        # variants are kept anyway when gnomAD_AF is not defined
-                                        newline = line
-                                        kept += 1
+                            #start
+                            if not (line[var_c] == "5'Flank" and line[h_s] != "TERT"):
+                                # filter based on Matched_Norm_Sample_Barcode
+                                if line[header.index('Matched_Norm_Sample_Barcode')] == "unmatched":
+                                    # check gnomAD_AF. field may be blank, check if value recorded
+                                    try:
+                                        float(line[header.index('gnomAD_AF')])
+                                    except:
+                                        # check if variants are kept or not
+                                        if keep_variants:
+                                            # variants are kept anyway when gnomAD_AF is not defined
+                                            newline = line
+                                            kept += 1
+                                        else:
+                                            # no value for gnomAD_AF, do not keep mutation
+                                            newline = ''
+                                            filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF has no value & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                                     else:
-                                        # no value for gnomAD_AF, do not keep mutation
-                                        newline = ''
+                                        # compare gnomAD_AF to folder
+                                        if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
+                                            newline = line
+                                            kept += 1
+                                        else:
+                                            filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "gnomAD_AF value to larger & unmatched barcode", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                                 else:
-                                    # compare gnomAD_AF to folder
-                                    if float(line[header.index('gnomAD_AF')]) < gnomAD_AF_filter:
-                                        newline = line
-                                        kept += 1
+                                    newline = line
+                                    kept += 1
                             else:
-                                newline = line
-                                kept += 1
+                                filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "Hugo symbol and variant class error", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+                            #end
+                        else:
+                            filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "t_alt_count / t_depth", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
                     else:
                         # discard mutations without supporting read count
                         newline = ''
+                        filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "unsupported read count", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+                else:
+                    filtered_out_list.append({"hugo_symbol": line[h_s], "reason": "Depth to small", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+            else:
+                line = line.split('\t')
+                removal_reason = 'non valid mutation; ' + line[var_c]
+                filtered_out_list.append({"hugo_symbol": line[h_s], "reason": f"{removal_reason}", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
             if newline:
                 newfile.write('\t'.join(newline) + '\n')
-    newfile.close()                
+    newfile.close()
+    header_list = ["hugo_symbol", "reason", "variant_type", "chr", "start_pos", "end_pos", "ref_allel", "tumor_bar"]
+    removed_filtered_data(removedfile, filtered_out_list, header_list)                
     return total, kept                
   
 
-def remove_indels(maffile, outputfile):
+def remove_indels(maffile, outputfile, removedfile):
     '''
     (str, str) -> (int, int)
     
@@ -2120,6 +2187,7 @@ def remove_indels(maffile, outputfile):
     ----------
     - maffile (str): Path to the maf file (unzipped)
     - outputfile (str): Path to the output file
+    - removedfile (str): Name of removed file
     '''
     
     # count the number of mutations before and after filtering
@@ -2134,6 +2202,19 @@ def remove_indels(maffile, outputfile):
     
     # write header to outputfile
     newfile.write('\t'.join(header) + '\n')
+
+    #ADDED TO SPEED UP SEARCHING
+    h_s=header.index('Hugo_Symbol')
+    chr_n=header.index('Chromosome')
+    s_p=header.index('Start_Position')
+    e_p=header.index('End_Position')
+    ref_a=header.index('Reference_Allele')
+    var_c=header.index('Variant_Classification')
+    var_t=header.index('Variant_Type')
+    tum_bar=header.index('Tumor_Sample_Barcode')
+
+
+    filtered_out_list = []
     
     for line in infile:
         # count total mutations
@@ -2144,6 +2225,17 @@ def remove_indels(maffile, outputfile):
                 # record mutations without indels and update counter
                 newfile.write('\t'.join(line) + '\n')
                 kept += 1
+            else:
+                line = line.split('\t') 
+                removal_reason = 'INDEL; ' + line[var_c]
+                filtered_out_list.append({"hugo_symbol": line[h_s], "reason": f"{removal_reason}", "variant_type": line[var_t], "chr": line[chr_n], "start_pos": line[s_p], "end_pos": line[e_p], "ref_allel": line[ref_a], "tumor_bar": line[tum_bar]})
+
+    newfile.close()
+
+    header_list = ["hugo_symbol", "reason", "variant_type", "chr", "start_pos", "end_pos", "ref_allel", "tumor_bar"]
+    removed_filtered_data(removedfile, filtered_out_list, header_list)
+
+
     newfile.close()                
     return total, kept                
 
@@ -3106,8 +3198,8 @@ def remove_samples_from_gepfile(gepfile, discarded_samples):
     '''
     (str, list) -> int
     
-    Delete fusions from the fusion file for samples in discarded samples
-    and returns the number of removed fusions
+    Delete genes from the gep file for samples in discarded samples
+    and returns the number of removed genes
     
     Parameters
     ----------
@@ -3411,7 +3503,7 @@ def make_import_folder(args):
         maffile = os.path.join(mafdir, 'input.maf.txt')
         # filter mutations and indels if option is activated
         if filter_variants:
-            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants)
+            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants, os.path.join(mafdir, 'filtered.mutations.removed.txt'))
             print("before mutations filtering: ", total)
             print("after mutations filtering: ", kept)
             print('filtered variants')
@@ -3421,12 +3513,14 @@ def make_import_folder(args):
             if filter_variants:
                 maf_to_filter = os.path.join(mafdir, 'filtered.mutations.txt')
                 maf_filtered = os.path.join(mafdir, 'filtered.mutations.indels.txt')
+                maf_rem = os.path.join(mafdir, 'filtered.mutations.indels.remove.txt')
             else:
                 maf_to_filter = os.path.join(mafdir, 'all_mutations.maf.txt')
                 maf_filtered = os.path.join(mafdir, 'filtered.indels.txt')
+                maf_rem = os.path.join(mafdir, 'filtered.indels.remove.txt')
             # output file for MafAnnotator
             maf_input_annotation = maf_filtered
-            total, kept = remove_indels(maf_to_filter, maf_filtered)
+            total, kept = remove_indels(maf_to_filter, maf_filtered, maf_rem)
             print("before indel filtering: ", total)
             print("after indel filtering: ", kept)
             print('filtered indels')
@@ -3462,7 +3556,7 @@ def make_import_folder(args):
             # unfiltered data
             df_cbio_anno.to_csv(os.path.join(suppdir, 'unfiltered_data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
         else:
-            df_cbio_filt = pd.read_csv(args.maffile, sep="\t", header=0)
+            df_cbio_filt = pd.read_csv(maffile, sep="\t", header=0)
             df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
             df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
 
