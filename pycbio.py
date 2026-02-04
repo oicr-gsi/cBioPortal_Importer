@@ -120,21 +120,24 @@ def convert_purple_to_seg(somatic_file, purity, ploidy, sample_name):
         line = line.rstrip()
         if line:
             line = line.split('\t')
-            # compute seg.mean       
-            copyNumber = float(line[header.index('copyNumber')])
-            
-            with warnings.catch_warnings():
-                warnings.simplefilter("error", RuntimeWarning)
-                try:
-                    adjusted_copy_number = np.log2(1 + (purity *(copyNumber - ploidy)/ploidy))
-                except:
-                    adjusted_copy_number = np.nan
-                finally:
-                    L.append([sample_name, line[header.index('chromosome')],
-                              line[header.index('start')],
-                              line[header.index('end')],
-                              line[header.index('bafCount')],
-                              str(adjusted_copy_number)])
+            # remove records when bafcount is 0
+            if int(line[header.index('bafCount')]) != 0:
+                # compute seg.mean       
+                copyNumber = float(line[header.index('copyNumber')])
+                # only includes seg.mean when it is defined
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", RuntimeWarning)
+                    try:
+                        adjusted_copy_number = np.log2(1 + (purity *(copyNumber - ploidy)/ploidy))
+                    except:
+                        adjusted_copy_number = 'NA'
+                    finally:
+                        if adjusted_copy_number != 'NA':
+                            L.append([sample_name, line[header.index('chromosome')],
+                                      line[header.index('start')],
+                                      line[header.index('end')],
+                                      line[header.index('bafCount')],
+                                      str(adjusted_copy_number)])
     infile.close()
     
     return L
