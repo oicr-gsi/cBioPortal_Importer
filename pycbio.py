@@ -26,6 +26,8 @@ from rpy2.robjects.packages import importr
 from rpy2.robjects.conversion import localconverter
 from scipy.stats import zscore
 
+
+
 cntools = importr('CNTools')
 
 
@@ -3293,6 +3295,25 @@ def remove_samples_from_segfile(segfile, discarded_samples):
 
 
 
+def copy_resource(file, destination_dir):
+    '''
+    (str, str) -> None
+    
+    Copy file in the destination directory
+    
+    Parameters
+    ----------
+    - file (str): Path to the file to be copied
+    - destination_dir (str): Path to the destination where file is copied
+    '''
+    
+    filename = os.path.basename(file)
+    copied_file = os.path.join(destination_dir, filename)
+    shutil.copyfile(file, copied_file)    
+    
+
+
+
 
 
 def make_import_folder(args):
@@ -3324,6 +3345,29 @@ def make_import_folder(args):
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
     print('extracted variables from config')
+    
+    # copy config file to out directory
+    copy_resource(args.config, outdir)
+    copy_resource(mapfile, outdir)
+
+        
+        
+        
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     # check that outdir is different than import folder dir
     # check that correct options are used when merging data
