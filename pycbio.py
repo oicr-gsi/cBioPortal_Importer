@@ -616,22 +616,53 @@ def compZ(df):
 
 
 
-def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep):
+# def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep):
+#     '''
+#     (str, str, str, str, str, str) -> None
+    
+#     Create sub-directories in outdir for each type of file listed in map file if at least 1 such file exists.
+#     Also create sub-directories if data from a previous impor folder exists and need to be merged even if no such data 
+#     exist in the current map file.
+        
+#     Parameters
+#     ----------
+#     - outdir (str): Path to the output directory where mafdir, sgedir, fusdir and gepdir folders are located 
+#     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files
+#     - merge_maf (str): Path the maf file that need to be merged or empty string  
+#     - merge_seg (str): Path the sequenza file that need to be merged or empty string
+#     - merge_fus (str): Path the mavis file that need to be merged or empty string
+#     - merge_gep (str): Path the rsem file that need to be merged or empty string 
+#     '''
+
+#     # create input directories based on mapping file   
+#     for i in ['maf', 'seg', 'gep', 'fus']:
+#         files = extract_files_from_map(mapfile, i)
+#         if files:
+#             filedir = os.path.join(outdir, '{0}dir'.format(i))
+#             os.makedirs(filedir, exist_ok=True)
+
+#     # create input directories if data from previous import folder needs to be merged
+#     data_files = [merge_maf, merge_seg, merge_fus, merge_gep]
+#     data_dirs = ['mafdir', 'segdir', 'gepdir', 'fusdir']
+#     for i in range(len(data_files)):
+#         if data_files[i] and os.path.isfile(data_files[i]):
+#             filedir = os.path.join(outdir, data_dirs[i])
+#             os.makedirs(filedir, exist_ok=True)
+
+
+
+
+
+def create_input_directories(outdir, mapfile):
     '''
-    (str, str, str, str, str, str) -> None
+    (str, str) -> None
     
     Create sub-directories in outdir for each type of file listed in map file if at least 1 such file exists.
-    Also create sub-directories if data from a previous impor folder exists and need to be merged even if no such data 
-    exist in the current map file.
-        
+            
     Parameters
     ----------
     - outdir (str): Path to the output directory where mafdir, sgedir, fusdir and gepdir folders are located 
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files
-    - merge_maf (str): Path the maf file that need to be merged or empty string  
-    - merge_seg (str): Path the sequenza file that need to be merged or empty string
-    - merge_fus (str): Path the mavis file that need to be merged or empty string
-    - merge_gep (str): Path the rsem file that need to be merged or empty string 
     '''
 
     # create input directories based on mapping file   
@@ -641,15 +672,7 @@ def create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, m
             filedir = os.path.join(outdir, '{0}dir'.format(i))
             os.makedirs(filedir, exist_ok=True)
 
-    # create input directories if data from previous import folder needs to be merged
-    data_files = [merge_maf, merge_seg, merge_fus, merge_gep]
-    data_dirs = ['mafdir', 'segdir', 'gepdir', 'fusdir']
-    for i in range(len(data_files)):
-        if data_files[i] and os.path.isfile(data_files[i]):
-            filedir = os.path.join(outdir, data_dirs[i])
-            os.makedirs(filedir, exist_ok=True)
-
-
+    
 
 def write_meta_study(outputfile, study, project_name, description, genome, cancerType):
     '''
@@ -707,18 +730,70 @@ def write_meta_clinical(cbio_import_dir, project_name, data_type):
     newfile.close()
     
 
-def check_genome_version(mapfile, genome, merge_maf=None):
+# def check_genome_version(mapfile, genome, merge_maf=None):
+#     '''
+#     (str, str, str | None) -> None
+    
+#     Check if the genome version (hg19 or hg38) found in each MAF file listed in the map file,
+#     and in the merge maf, if they exist, are the same as the expected genome ref from the config file
+        
+#     Parameters
+#     ----------
+#     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
+#     - genome (str): Genome reference from the config file
+#     - merge_maf (str | None): Path the maf file that need to be merged or None 
+#     '''
+    
+#     # get mafs listed in mapfile
+#     mafs = extract_files_from_map(mapfile, 'maf')
+#     L = set()
+#     if mafs:
+#         for i in mafs:
+#             # grab genome column in maf. skipping header and commented lines
+#             infile = gzip.open(i, 'rt')
+#             for line in infile:
+#                 if not line.startswith('#') and 'Hugo_Symbol' not in line:
+#                     line = line.rstrip().split('\t')
+#                     L.add(line[3])              
+#             infile.close()
+    
+#     # check if merging mafs
+#     if merge_maf:
+#         infile = open(merge_maf)
+#         for line in infile:
+#             if not line.startswith('#') and 'Hugo_Symbol' not in line:
+#                 line = line.rstrip().split('\t')
+#                 L.add(line[3])              
+#         infile.close()    
+    
+#     # convert genome identifier
+#     L = ';'.join(list(L))
+#     if L == "GRCh38":
+#         genomev="hg38"
+#     elif L == "GRCh37":
+#         genomev="hg19"
+#     else:
+#         genomev = L
+        
+#     if genomev:
+#         if genome != genomev:
+#             raise ValueError('ERROR. Reference in MAF file does not match reference in config: {0} vs {1}'.format(genome, genomev))
+#         else:
+#             print('validated reference genome: {0}'.format(genome))
+    
+
+
+def check_genome_version(mapfile, genome):
     '''
-    (str, str, str | None) -> None
+    (str, str) -> None
     
     Check if the genome version (hg19 or hg38) found in each MAF file listed in the map file,
-    and in the merge maf, if they exist, are the same as the expected genome ref from the config file
+    if they exist, are the same as the expected genome ref from the config file
         
     Parameters
     ----------
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - genome (str): Genome reference from the config file
-    - merge_maf (str | None): Path the maf file that need to be merged or None 
     '''
     
     # get mafs listed in mapfile
@@ -734,15 +809,6 @@ def check_genome_version(mapfile, genome, merge_maf=None):
                     L.add(line[3])              
             infile.close()
     
-    # check if merging mafs
-    if merge_maf:
-        infile = open(merge_maf)
-        for line in infile:
-            if not line.startswith('#') and 'Hugo_Symbol' not in line:
-                line = line.rstrip().split('\t')
-                L.add(line[3])              
-        infile.close()    
-    
     # convert genome identifier
     L = ';'.join(list(L))
     if L == "GRCh38":
@@ -757,13 +823,95 @@ def check_genome_version(mapfile, genome, merge_maf=None):
             raise ValueError('ERROR. Reference in MAF file does not match reference in config: {0} vs {1}'.format(genome, genomev))
         else:
             print('validated reference genome: {0}'.format(genome))
+
+
+
+# def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = None, discarded_samples = None):
+#     '''
+#     (str, str, str, str, str|None, str|None) -> None
+    
+#     Write list of samples profiled for data type 
+            
+#     Parameters
+#     ----------
+#     - outputfile (str): Path to the outputfile
+#     - project_name (str): Field project_name in configuration file
+#     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
+#     - data_type (str): The type of data considered.
+#                        Values accepted are: seq, rna, cna, cna_seq, cna_seq_rna, sv
+#     - merge_samples (list | None): List of case samples for a given data type from a previous import folder that needs to be merged
+#     - discarded_samples (list | None): List of samples and/or donors to remove
+#     '''
+    
+#     #read mapfile
+#     infile = open(mapfile)
+#     content = infile.read().rstrip().split('\n')
+#     infile.close()
+    
+#     # make a list of samples
+#     if data_type == 'seq':
+#         # make a list of samples for which maf files are available
+#         samples = [i.split(',')[1] for i in content if i.split(',')[2].upper() != 'NA']
+#         name = 'Samples profiled for mutations'
+#         description = 'This is this case list that contains all samples that are profiled for mutations.'
+#         stable_id = '{0}_sequenced'.format(project_name)
+#     elif data_type == 'sv':
+#         # make a list of samples for which SV files are available
+#         samples = [i.split(',')[1] for i in content if i.split(',')[5].upper() != 'NA']
+#         name = 'Samples profiled for structural variants'
+#         description = 'This is this case list that contains all samples that are profiled for structural variants.'
+#         stable_id = '{0}_sv'.format(project_name)
+#     elif data_type == 'rna':
+#         # make a list of samples for which rsem files are available
+#         samples = [i.split(',')[1] for i in content if i.split(',')[4].upper() != 'NA']
+#         name = 'Samples profiled for rnaseq'
+#         description = 'This is this case list that contains all samples that are profiled for rnaseq.'
+#         stable_id = '{0}_rna_seq_mrna'.format(project_name)    
+#     elif data_type == 'cna':
+#         # make a list of samples for which cna files are available
+#         samples = [i.split(',')[1] for i in content if i.split(',')[3].upper() != 'NA']
+#         name = 'Samples profiled for cnas'
+#         description = 'This is this case list that contains all samples that are profiled for cnas.'
+#         stable_id = '{0}_cna'.format(project_name)
+#     elif data_type == 'cna_seq':
+#         # make a list of samples for which cna and maf files are available
+#         samples = [i.split(',')[1] for i in content if i.split(',')[3].upper() != 'NA' and i.split(',')[2].upper() != 'NA' ]
+#         name = 'Samples profiled for cnas and sequencing'
+#         description = 'This is this case list that contains all samples that are profiled for mutations and cnas.'
+#         stable_id = '{0}_cnaseq'.format(project_name)
+#     elif data_type == 'cna_seq_rna':
+#         # make a list of samples for which cna and maf and rna files are available
+#         samples = [i.split(',')[1] for i in content if i.split(',')[2].upper() != 'NA' and i.split(',')[3].upper() != 'NA' and i.split(',')[4].upper() != 'NA']
+#         name = 'Samples profiled for all of mutation, cnas, and rnaseq'
+#         description = 'This is this case list that contains all samples that are profiled for mutations, cnas, and rnaseq.'
+#         stable_id = '{0}_3way_complete'.format(project_name)
+    
+#     # write outputfile if samples exist
+#     # merge samples from previous import folder if they exist
+#     samples.extend(merge_samples)
+    
+#     # remove samples
+#     for i in discarded_samples:
+#         if i in samples:
+#             samples.remove(i)
+       
+#     if samples:
+#         newfile = open(outputfile, 'w')
+#         L = ['cancer_study_identifier: {0}'.format(project_name),
+#              'stable_id: {0}'.format(stable_id),
+#              'case_list_name: {0}'.format(name),
+#              'case_list_description: {0}'.format(description),
+#              'case_list_ids: {0}'.format('\t'.join(samples))]
+#         newfile.write('\n'.join(L))
+#         newfile.close()
+    
     
 
 
 
-def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = None, discarded_samples = None):
+def write_cases(outputfile, project_name, mapfile, data_type):
     '''
-    (str, str, str, str, str|None, str|None) -> None
+    (str, str, str, str) -> None
     
     Write list of samples profiled for data type 
             
@@ -774,8 +922,6 @@ def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = No
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - data_type (str): The type of data considered.
                        Values accepted are: seq, rna, cna, cna_seq, cna_seq_rna, sv
-    - merge_samples (list | None): List of case samples for a given data type from a previous import folder that needs to be merged
-    - discarded_samples (list | None): List of samples and/or donors to remove
     '''
     
     #read mapfile
@@ -822,14 +968,6 @@ def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = No
         stable_id = '{0}_3way_complete'.format(project_name)
     
     # write outputfile if samples exist
-    # merge samples from previous import folder if they exist
-    samples.extend(merge_samples)
-    
-    # remove samples
-    for i in discarded_samples:
-        if i in samples:
-            samples.remove(i)
-       
     if samples:
         newfile = open(outputfile, 'w')
         L = ['cancer_study_identifier: {0}'.format(project_name),
@@ -839,8 +977,10 @@ def write_cases(outputfile, project_name, mapfile, data_type, merge_samples = No
              'case_list_ids: {0}'.format('\t'.join(samples))]
         newfile.write('\n'.join(L))
         newfile.close()
-    
-    
+
+
+
+
     
 def get_clinical_data(clinical_info):
     '''
@@ -1115,9 +1255,65 @@ def parse_clinical_samples(append_data, merge_import_folder, clinical_sample = '
 
 
 
-def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merge_patient_clinical_info=None, discarded_donors=None):
+# def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merge_patient_clinical_info=None, discarded_donors=None):
+#     '''
+#     (str, str, str, list | None, list | None) -> None
+    
+#     Write clinical files with minimal clinical information
+    
+#     Parameters
+#     ----------    
+#     - outputfile (str): Path to the outputfile
+#     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
+#     - centre (str): Genomic centre (eg TGL, OICR)
+#     - merge_patient_clinical_info (list | None): List with patient clinical information to be merged
+#     - discarded_donors (list | None): List of donors to exclude
+#     '''
+    
+#     # make a list with sample names and libraries
+#     infile = open(mapfile)
+#     content = infile.read().rstrip().split('\n')
+#     infile.close()
+#     S = [i.split(',')[0:2] for i in content]
+        
+#     # make a list of unique records
+#     U = []
+#     for i in S:
+#         record = [i[0], centre]
+#         if record not in U:
+#             U.append(record)
+#     # add clinical information to be merged if it exists
+#     U.extend(merge_patient_clinical_info)
+    
+
+#     # remove donors 
+#     if discarded_donors:
+#         remove = [i for i in U if i[0] in discarded_donors]
+#         for i in remove:
+#             U.remove(i)
+              
+#     T = ['#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
+#          '#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
+#          '#STRING\tSTRING\tNUMBER\tSTRING\tSTRING']
+#     T.append('#1' + ('\t1' * (len(T[0].split('\t')) -1)))     
+#     T.append('PATIENT_ID\tCENTRE\tAGE\tSEX\tETHNICITY')
+        
+#     for i in U:
+#         T.append('\t'.join(i + [''] * (len(T[0].split('\t')) - len(i))))
+        
+#     newfile = open(outputfile, 'w')
+#     for i in T:
+#         newfile.write(i + '\n')
+#     newfile.close()
+
+
+
+
+
+
+def write_patient_minimal_clinical_information(outputfile, mapfile, centre):
     '''
-    (str, str, str, list | None, list | None) -> None
+    (str, str, str) -> None
     
     Write clinical files with minimal clinical information
     
@@ -1126,8 +1322,6 @@ def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merg
     - outputfile (str): Path to the outputfile
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - centre (str): Genomic centre (eg TGL, OICR)
-    - merge_patient_clinical_info (list | None): List with patient clinical information to be merged
-    - discarded_donors (list | None): List of donors to exclude
     '''
     
     # make a list with sample names and libraries
@@ -1142,16 +1336,7 @@ def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merg
         record = [i[0], centre]
         if record not in U:
             U.append(record)
-    # add clinical information to be merged if it exists
-    U.extend(merge_patient_clinical_info)
-    
-
-    # remove donors 
-    if discarded_donors:
-        remove = [i for i in U if i[0] in discarded_donors]
-        for i in remove:
-            U.remove(i)
-              
+       
     T = ['#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
          '#Patient Identifier\tCentre\tAGE DIAGNOSIS\tSEX\tETHNICITY',
          '#STRING\tSTRING\tNUMBER\tSTRING\tSTRING']
@@ -1168,7 +1353,105 @@ def write_patient_minimal_clinical_information(outputfile, mapfile, centre, merg
 
 
 
-def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sample_info = None, merge_sample_clinical_info = None, discarded_samples=None):
+
+
+
+# def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sample_info = None, merge_sample_clinical_info = None, discarded_samples=None):
+#     '''
+#     (str, str, str, str, dict | None, dict | None, list | None) -> None
+    
+#     Write clinical files with minimal clinical information
+    
+#     Parameters
+#     ----------    
+#     - outputfile (str): Path to the outputfile
+#     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
+#     - centre (str): Genomic centre (eg TGL, OICR)
+#     - sample_info (dict | None): Dictionary with patient and sample information. Populates the sample clinical file
+#     - merge_sample_clinical_info (dict, | None): Dictionary with clinical sample information to be merged 
+#     - discarded_samples (list | None): List of samples to exclude
+#     '''
+    
+#     # make a list with sample names and libraries
+#     infile = open(mapfile)
+#     content = infile.read().rstrip().split('\n')
+#     infile.close()
+#     S = [i.split(',')[0:2] for i in content]
+    
+#     # build header
+#     T = ['#Patient Identifier\tSample Identifier\tCosmic Signature\tPRIMARY SITE\tCANCER TYPE\tCLOSEST TCGA\tSAMPLE ANATOMICAL SITE\tSAMPLE PRIMARY OR METASTASIS\tTREATMENT STATUS\tPATHOLOGICAL REVIEW\tPRIOR CLINCAL TEST RESULTS\tMEAN COVERAGE\tPCT V7 ABOVE 80X\tPCT CALLABILITY\tSEQUENZA PURITY FRACTION\tSEQUENZA PLOIDY\tTMB PER MB\tHRD SCORE\tMSI STATUS',
+#          '#Patient Identifier\tSample Identifier\tCosmic Signature\tPRIMARY SITE\tCANCER TYPE\tCLOSEST TCGA\tSAMPLE ANATOMICAL SITE\tSAMPLE PRIMARY OR METASTASIS\tTREATMENT STATUS\tPATHOLOGICAL REVIEW\tPRIOR CLINCAL TEST RESULTS\tMEAN COVERAGE\tPCT V7 ABOVE 80X\tPCT CALLABILITY\tSEQUENZA PURITY FRACTION\tSEQUENZA PLOIDY\tTMB PER MB\tHRD SCORE\tMSI STATUS',
+#          '#STRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tSTRING\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tNUMBER\tSTRING']
+#     T.append('#1' + ('\t1' * (len(T[0].split('\t')) -1)))     
+#     T.append('PATIENT_ID\tSAMPLE_ID\tCOSMIC_SIGS\tCANCER_TYPE\tCANCER_TYPE_DETAILED\tCLOSEST_TCGA\tSAMPLE_ANATOMICAL_SITE\tSAMPLE_PRIMARY_OR_METASTASIS\tTREATMENT_STATUS\tPATHOLOGICAL_REVIEW\tPRIOR_CLINCAL_TEST_RESULTS\tMEAN_COVERAGE\tPCT_V7_ABOVE_80X\tFRAC_CALLABILITY\tSEQUENZA_PURITY_FRACTION\tSEQUENZA_PLOIDY\tTMB_PER_MB\tHRD_SCORE\tMSI_STATUS')
+    
+#     # convert header to lists of lists
+#     for i in range(len(T)):
+#         T[i] = T[i].split('\t')
+
+#     # update header with data type to be merged
+#     if merge_sample_clinical_info:
+#         T = update_clinical_sample_header_with_merging_data(merge_sample_clinical_info, T)
+#     # update header with clinical information                         
+#     if sample_info:
+#         T = update_clinical_sample_header(sample_info, T)
+    
+#     # check if column names include banned columns
+#     header_columns = get_clinical_fields(T)
+#     check_column_names(header_columns)
+    
+#     # map columns to positions
+#     positions = map_columns_to_header(header_columns, T)
+                           
+#     # initialize all columns with empty values beside patient and sample Ids
+#     data = {}
+#     for i in S:
+#         ID = i[0] + ';' + i[1]
+#         data[ID] = [i[0], i[1]] + ['' for j in range((len(T[0]) - 2))]
+#     if merge_sample_clinical_info:
+#         for ID in merge_sample_clinical_info:
+#             data[ID] = [ID.split(';')[0], ID.split(';')[1]] + ['' for j in range((len(T[0]) - 2))]
+#             # add values to clinical fields            
+#             for field in merge_sample_clinical_info[ID]:
+#                 data[ID][positions[field]] = merge_sample_clinical_info[ID][field]['value']
+#     if sample_info:
+#         for ID in sample_info:
+#             # add values to clinical fields
+#             for field in sample_info[ID]:
+#                 data[ID][positions[field]] = sample_info[ID][field]      
+
+    
+#     for ID in data:
+#         assert len(data[ID]) == len(T[0])
+    
+#     # remove samples
+#     if discarded_samples:
+#         remove = []
+#         for i in discarded_samples:
+#             for j in data:
+#                 if i in j:
+#                     remove.append(j)
+#         for i in remove:
+#             del data[i]
+    
+#     # write sample clinical file    
+#     newfile = open(outputfile, 'w')
+#     for i in T:
+#         newfile.write('\t'.join(i) + '\n')
+#     # sort Ids
+#     IDs = sorted(list(data.keys()))
+#     for ID in IDs:
+#         data[ID] = list(map(lambda x: str(x), data[ID]))
+#         newfile.write('\t'.join(data[ID]) + '\n')
+#     newfile.close()
+
+
+
+
+
+
+
+def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sample_info = None):
     '''
     (str, str, str, str, dict | None, dict | None, list | None) -> None
     
@@ -1180,8 +1463,6 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - centre (str): Genomic centre (eg TGL, OICR)
     - sample_info (dict | None): Dictionary with patient and sample information. Populates the sample clinical file
-    - merge_sample_clinical_info (dict, | None): Dictionary with clinical sample information to be merged 
-    - discarded_samples (list | None): List of samples to exclude
     '''
     
     # make a list with sample names and libraries
@@ -1201,9 +1482,6 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
     for i in range(len(T)):
         T[i] = T[i].split('\t')
 
-    # update header with data type to be merged
-    if merge_sample_clinical_info:
-        T = update_clinical_sample_header_with_merging_data(merge_sample_clinical_info, T)
     # update header with clinical information                         
     if sample_info:
         T = update_clinical_sample_header(sample_info, T)
@@ -1220,31 +1498,14 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
     for i in S:
         ID = i[0] + ';' + i[1]
         data[ID] = [i[0], i[1]] + ['' for j in range((len(T[0]) - 2))]
-    if merge_sample_clinical_info:
-        for ID in merge_sample_clinical_info:
-            data[ID] = [ID.split(';')[0], ID.split(';')[1]] + ['' for j in range((len(T[0]) - 2))]
-            # add values to clinical fields            
-            for field in merge_sample_clinical_info[ID]:
-                data[ID][positions[field]] = merge_sample_clinical_info[ID][field]['value']
     if sample_info:
         for ID in sample_info:
             # add values to clinical fields
             for field in sample_info[ID]:
                 data[ID][positions[field]] = sample_info[ID][field]      
 
-    
     for ID in data:
         assert len(data[ID]) == len(T[0])
-    
-    # remove samples
-    if discarded_samples:
-        remove = []
-        for i in discarded_samples:
-            for j in data:
-                if i in j:
-                    remove.append(j)
-        for i in remove:
-            del data[i]
     
     # write sample clinical file    
     newfile = open(outputfile, 'w')
@@ -1256,6 +1517,8 @@ def write_sample_minimal_clinical_information(outputfile, mapfile, centre, sampl
         data[ID] = list(map(lambda x: str(x), data[ID]))
         newfile.write('\t'.join(data[ID]) + '\n')
     newfile.close()
+
+
 
 
 
@@ -1290,9 +1553,50 @@ def parse_clinical_oncokb(append_data, merge_import_folder, clinical_oncokb = 'o
 
    
 
-def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncokb=None, discarded_samples=None):
+# def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncokb=None, discarded_samples=None):
+#     '''
+#     (str, str, str, list | None, list | None) -> None
+    
+#     Write clinical file for oncokb-annotator
+    
+#     Parameters
+#     ----------    
+#     - outputfile (str): Path to the outputfile
+#     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
+#     - cancer_code (str): Cancer code from OncoTree
+#     - merge_clinical_oncokb (list, None): List of samples from the clinical oncokb file of a previous import folder that needs to be merged
+#     - discarded_samples (list | None): List of samples to exclude
+#     '''
+       
+#     # get library and cancer type from the mapfile
+#     infile = open(mapfile)    
+#     content = infile.read().rstrip().split('\n')
+#     infile.close()
+#     # create a list of samples
+#     L = [i.split(',')[1].strip() for i in content]
+    
+#     # add samples to merge if they exist
+#     if merge_clinical_oncokb:
+#         L.extend(merge_clinical_oncokb)
+    
+#     # remove samples
+#     if discarded_samples:
+#         remove = [i for i in L if i in discarded_samples]
+#         for i in remove:
+#             L.remove(i)
+    
+#     if L:
+#         newfile = open(outputfile, 'w')
+#         header = ['SAMPLE_ID', 'ONCOTREE_CODE']
+#         newfile.write('\t'.join(header) + '\n')
+#         for i in L:
+#             newfile.write('\t'.join([i, cancer_code]) + '\n')
+#         newfile.close()
+
+
+def write_clinical_oncokb(outputfile, mapfile, cancer_code):
     '''
-    (str, str, str, list | None, list | None) -> None
+    (str, str, str) -> None
     
     Write clinical file for oncokb-annotator
     
@@ -1301,8 +1605,6 @@ def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncok
     - outputfile (str): Path to the outputfile
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
     - cancer_code (str): Cancer code from OncoTree
-    - merge_clinical_oncokb (list, None): List of samples from the clinical oncokb file of a previous import folder that needs to be merged
-    - discarded_samples (list | None): List of samples to exclude
     '''
        
     # get library and cancer type from the mapfile
@@ -1312,16 +1614,6 @@ def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncok
     # create a list of samples
     L = [i.split(',')[1].strip() for i in content]
     
-    # add samples to merge if they exist
-    if merge_clinical_oncokb:
-        L.extend(merge_clinical_oncokb)
-    
-    # remove samples
-    if discarded_samples:
-        remove = [i for i in L if i in discarded_samples]
-        for i in remove:
-            L.remove(i)
-    
     if L:
         newfile = open(outputfile, 'w')
         header = ['SAMPLE_ID', 'ONCOTREE_CODE']
@@ -1329,6 +1621,7 @@ def write_clinical_oncokb(outputfile, mapfile, cancer_code, merge_clinical_oncok
         for i in L:
             newfile.write('\t'.join([i, cancer_code]) + '\n')
         newfile.close()
+
 
 
 
@@ -1406,9 +1699,70 @@ def get_sample_from_filename(file):
     return name                
             
     
-def concatenate_seg_files(segdir, outputfile, merge_seg=None):
+# def concatenate_seg_files(segdir, outputfile, merge_seg=None):
+#     '''
+#     (str, str, str | None) -> None
+    
+#     Concatenate seg files located in segdir into outputfile
+    
+#     Parameters
+#     ----------
+#     - segdir (str): Directory with seg files
+#     - outputfile (str): Path to the concatenated seg file
+#     - merge_seg (str | None): Path the sequenza file that need to be merged if it exists
+#     '''
+
+#     # make a list of seg files
+#     segfiles = [os.path.join(segdir, i) for i in os.listdir(segdir) if '.seg' in i]
+#     # get the header of the seg file
+#     if segfiles:
+#         infile = open(segfiles[0])
+#         header = infile.readline()
+#         infile.close()
+#     elif merge_seg:
+#         infile = open(merge_seg)
+#         header = infile.readline()
+#         infile.close()
+    
+#     newfile = open(outputfile, 'w')
+#     newfile.write(header)
+    
+#     # concatenate sequencza files from the map file
+#     for file in segfiles:
+#         # extract the sample name from file name
+#         sample = get_sample_from_filename(file)
+#         # get content of seg file
+#         infile = open(file)
+#         content = infile.read().rstrip().split('\n')
+#         infile.close()
+#         # remove header
+#         content.pop(0)
+#         # replace ID field with sample name
+#         for i in range(len(content)):
+#             content[i] = content[i].split('\t')
+#             content[i][0] = sample
+#             content[i] = '\t'.join(content[i])
+#         # write content of seg file to concatenated file
+#         newfile.write('\n'.join(content) + '\n')
+    
+#     # add sequenza files from the previous import folder if it exists
+#     if merge_seg:
+#         infile = open(merge_seg)
+#         #skip header
+#         infile.readline()
+#         merge_data = infile.read().rstrip()
+#         infile.close()
+#         newfile.write(merge_data + '\n')
+    
+#     newfile.close()        
+
+
+
+
+
+def concatenate_seg_files(segdir, outputfile):
     '''
-    (str, str, str | None) -> None
+    (str, str) -> None
     
     Concatenate seg files located in segdir into outputfile
     
@@ -1416,7 +1770,6 @@ def concatenate_seg_files(segdir, outputfile, merge_seg=None):
     ----------
     - segdir (str): Directory with seg files
     - outputfile (str): Path to the concatenated seg file
-    - merge_seg (str | None): Path the sequenza file that need to be merged if it exists
     '''
 
     # make a list of seg files
@@ -1426,11 +1779,7 @@ def concatenate_seg_files(segdir, outputfile, merge_seg=None):
         infile = open(segfiles[0])
         header = infile.readline()
         infile.close()
-    elif merge_seg:
-        infile = open(merge_seg)
-        header = infile.readline()
-        infile.close()
-    
+        
     newfile = open(outputfile, 'w')
     newfile.write(header)
     
@@ -1452,16 +1801,10 @@ def concatenate_seg_files(segdir, outputfile, merge_seg=None):
         # write content of seg file to concatenated file
         newfile.write('\n'.join(content) + '\n')
     
-    # add sequenza files from the previous import folder if it exists
-    if merge_seg:
-        infile = open(merge_seg)
-        #skip header
-        infile.readline()
-        merge_data = infile.read().rstrip()
-        infile.close()
-        newfile.write(merge_data + '\n')
-    
     newfile.close()        
+
+
+
 
 
 def write_metadata(outputfile, project_name, data_type, genome):
@@ -1579,7 +1922,56 @@ def select_fusion_file_for_header(fusfiles):
         return []
 
 
-def get_fusfiles_header(fusfiles, merge_fus=None):
+# def get_fusfiles_header(fusfiles, merge_fus=None):
+#     '''
+#     (list) -> dict
+    
+#     Returns a dictionary with the input data type WT, WG or both  for each sample
+    
+#     Parameters
+#     ----------
+#     - fusfiles (list): List of fusion files
+#     - merge_fus (str): Path to the concantenated fusion fileto be merged if it exists
+#     '''
+    
+#     D = {}
+    
+#     for i in fusfiles:
+#         # check that fusion file has data
+#         if check_fusion_data(i):
+#             sample = get_sample_from_filename(i)
+#             D[sample] = []
+#             infile = open(i)
+#             header = infile.readline().rstrip().split('\t')
+#             infile.close()
+#             for j in range(len(header)):
+#                 if 'WT.' in header[j]:
+#                     D[sample].append('WT')
+#                 elif 'WG.' in header[j]:
+#                     D[sample].append('WG')
+#                 D[sample].sort()
+    
+#     if merge_fus:
+#         infile = open(merge_fus)
+#         header = infile.readline().rstrip().split('\t')
+#         samples = infile.read().rstrip().split('\n')
+#         if samples:
+#             for i in range(len(samples)):
+#                 samples[i] = samples[i].split('\t')[0]
+#         L = []
+#         for j in range(len(header)):
+#             if 'WT.' in header[j] or header[j] == 'WT':
+#                 L.append('WT')
+#             elif 'WG.' in header[j] or header[j] == 'WG':
+#                 L.append('WG')
+#         for i in samples:
+#             D[i] = L
+            
+#     return D
+
+
+
+def get_fusfiles_header(fusfiles):
     '''
     (list) -> dict
     
@@ -1588,7 +1980,6 @@ def get_fusfiles_header(fusfiles, merge_fus=None):
     Parameters
     ----------
     - fusfiles (list): List of fusion files
-    - merge_fus (str): Path to the concantenated fusion fileto be merged if it exists
     '''
     
     D = {}
@@ -1608,24 +1999,7 @@ def get_fusfiles_header(fusfiles, merge_fus=None):
                     D[sample].append('WG')
                 D[sample].sort()
     
-    if merge_fus:
-        infile = open(merge_fus)
-        header = infile.readline().rstrip().split('\t')
-        samples = infile.read().rstrip().split('\n')
-        if samples:
-            for i in range(len(samples)):
-                samples[i] = samples[i].split('\t')[0]
-        L = []
-        for j in range(len(header)):
-            if 'WT.' in header[j] or header[j] == 'WT':
-                L.append('WT')
-            elif 'WG.' in header[j] or header[j] == 'WG':
-                L.append('WG')
-        for i in samples:
-            D[i] = L
-            
     return D
-
 
 
 def extract_fusion(fusion_file):
@@ -1696,25 +2070,112 @@ def extract_merged_fusion(merge_fusion):
     return L
 
 
-def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
-    '''
-    (str, str, str | None) -> None
+# def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
+#     '''
+#     (str, str, str | None) -> None
     
-    Concatenates fusion files located in fusdir into outputfile. Also adds fusion data
-    from previous import folder that needs to be merged, if it exists
+#     Concatenates fusion files located in fusdir into outputfile. Also adds fusion data
+#     from previous import folder that needs to be merged, if it exists
+    
+#     Parameters
+#     ----------
+#     - fusdir (str): Directory with fusion files
+#     - outputfile (str): Path to the concatenated seg file
+#     - merge_fus (str | None): Path the mavis file that need to be merged if it exists
+#     '''
+
+#     # make a list of fusion files
+#     fusfiles = [os.path.join(fusdir, i) for i in os.listdir(fusdir) if '.fus' in i]
+    
+#     # determine if the headers have WT, WG or both
+#     header_types = get_fusfiles_header(fusfiles, merge_fus)
+      
+#     data_types = []
+#     for i in header_types:
+#         data_types.extend(header_types[i])
+#     data_types = sorted(list(set(data_types)))
+    
+#     header = ['#tracking_id', 'library', 'annotation_id', 'product_id', 'event_type',
+#               'gene1', 'gene1_direction', 'gene2', 'gene2_direction', 'gene1_aliases',
+#               'gene2_aliases', 'gene_product_type', 'transcript1', 'transcript2',
+#               'fusion_splicing_pattern', 'fusion_cdna_coding_start', 'fusion_cdna_coding_end',
+#               'fusion_mapped_domains', 'fusion_protein_hgvs', 'annotation_figure',
+#               'genes_encompassed', 'break1_chromosome', 'break1_position_start',
+#               'break1_position_end', 'break1_orientation', 'exon_last_5prime',
+#               'exon_first_3prime', 'break1_strand', 'break2_chromosome',
+#               'break2_position_start', 'break2_position_end', 'break2_orientation',
+#               'break2_strand', 'protocol', 'tools', 'call_method', 'break1_homologous_seq',
+#               'break1_split_reads', 'break2_homologous_seq', 'break2_split_reads',
+#               'contig_alignment_score', 'contig_remapped_reads', 'contig_seq',
+#               'spanning_reads', 'flanking_pairs', 'linking_split_reads', 'untemplated_seq',
+#               'cdna_synon', 'protein_synon', 'supplementary_call', 'net_size',
+#               'assumed_untemplated', 'dgv']
+    
+#     # add extra columns indicating the origin of the data
+#     for i in data_types:
+#         header.insert(-1, i)
+    
+#     # add sample to header
+#     header.insert(0, 'Sample')
+    
+#     # write header to outputfile
+#     newfile = open(outputfile, 'w')
+#     newfile.write('\t'.join(header) + '\n')
+    
+#     for file in fusfiles:
+#         # check the content of fusion file
+#         if check_fusion_data(file):
+#             # extract sample name from file name
+#             sample = get_sample_from_filename(file)
+#             # extract data from file
+#             datafile = extract_fusion(file)
+#             for d in datafile:
+#                 newline = []
+#                 for i in range(len(header)):
+#                     if header[i] == 'Sample':
+#                         newline.append(sample)
+#                     elif header[i] in d:
+#                         newline.append(d[header[i]])
+#                     elif header[i] not in d:
+#                         newline.append('')
+#                 newfile.write('\t'.join(newline) + '\n')
+        
+#     # add data from pervious import folder to merge if it exists
+#     if merge_fus:
+#         # extract data from the fusion file
+#         merge_data = extract_merged_fusion(merge_fus)
+#         for d in merge_data:
+#             newline = []
+#             for i in range(len(header)):
+#                 if header[i] in d:
+#                     newline.append(d[header[i]])
+#                 else:
+#                     newline.append('')
+#             newfile.write('\t'.join(newline) + '\n')
+        
+#     newfile.close()        
+
+    
+
+
+
+def concatenate_fusion_files(fusdir, outputfile):
+    '''
+    (str, str) -> None
+    
+    Concatenates fusion files located in fusdir into outputfile.
     
     Parameters
     ----------
     - fusdir (str): Directory with fusion files
     - outputfile (str): Path to the concatenated seg file
-    - merge_fus (str | None): Path the mavis file that need to be merged if it exists
     '''
 
     # make a list of fusion files
     fusfiles = [os.path.join(fusdir, i) for i in os.listdir(fusdir) if '.fus' in i]
     
     # determine if the headers have WT, WG or both
-    header_types = get_fusfiles_header(fusfiles, merge_fus)
+    header_types = get_fusfiles_header(fusfiles)
       
     data_types = []
     for i in header_types:
@@ -1766,22 +2227,11 @@ def concatenate_fusion_files(fusdir, outputfile, merge_fus=None):
                         newline.append('')
                 newfile.write('\t'.join(newline) + '\n')
         
-    # add data from pervious import folder to merge if it exists
-    if merge_fus:
-        # extract data from the fusion file
-        merge_data = extract_merged_fusion(merge_fus)
-        for d in merge_data:
-            newline = []
-            for i in range(len(header)):
-                if header[i] in d:
-                    newline.append(d[header[i]])
-                else:
-                    newline.append('')
-            newfile.write('\t'.join(newline) + '\n')
-        
     newfile.close()        
 
-    
+
+
+
 
 def list_gep_samples(gepdir, outputfile):
     '''
@@ -1923,9 +2373,37 @@ def write_fpkm_to_file(D, outputfile):
     newfile.close()
     
 
-def concatenate_fpkm_from_gep_files(gepdir, outputfile, merge_gep):
+# def concatenate_fpkm_from_gep_files(gepdir, outputfile, merge_gep):
+#     '''
+#     (str, str, str) -> None
+    
+#     Write fpkm for all genes and samples with rna data to outputfile
+    
+#     Parameters
+#     ----------
+#     - gepdir (str): Directory with rsem files
+#     - outputfile (str): Path to the outputfile with fpkm for each sample and gene
+#     - merge_gep (str): Path to the fpkm file that need to be merged or empty string
+#     '''
+    
+#     # collect all fpkm for each gene and sample 
+#     fpkm = collect_fpkm(gepdir) if gepdir else {}
+#     merge_fpkm = parse_merge_gep(merge_gep) if merge_gep else {}
+#     # merge both dictionaries
+#     D = {}
+#     if fpkm:
+#         D.update(fpkm)
+#     if merge_fpkm:
+#         D.update(merge_fpkm)
+        
+#     # write fpkm to outputfile
+#     write_fpkm_to_file(D, outputfile)
+
+
+   
+def concatenate_fpkm_from_gep_files(gepdir, outputfile):
     '''
-    (str, str, str) -> None
+    (str, str) -> None
     
     Write fpkm for all genes and samples with rna data to outputfile
     
@@ -1933,24 +2411,15 @@ def concatenate_fpkm_from_gep_files(gepdir, outputfile, merge_gep):
     ----------
     - gepdir (str): Directory with rsem files
     - outputfile (str): Path to the outputfile with fpkm for each sample and gene
-    - merge_gep (str): Path to the fpkm file that need to be merged or empty string
     '''
     
     # collect all fpkm for each gene and sample 
     fpkm = collect_fpkm(gepdir) if gepdir else {}
-    merge_fpkm = parse_merge_gep(merge_gep) if merge_gep else {}
-    # merge both dictionaries
-    D = {}
-    if fpkm:
-        D.update(fpkm)
-    if merge_fpkm:
-        D.update(merge_fpkm)
-        
     # write fpkm to outputfile
-    write_fpkm_to_file(D, outputfile)
+    write_fpkm_to_file(fpkm, outputfile)
 
 
-   
+
 def get_maf_header(maffile):
     '''
     (str) -> str
@@ -1973,19 +2442,75 @@ def get_maf_header(maffile):
     
 
 
-def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
+# def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
+#     '''
+#     (str, str, str | None) -> None
+    
+#     Concatenates all the gzipped maf files in mafdir into a text file outputfile
+#     with column Tumor_Sample_Barcode replaced by the sample name.
+#     Also merge the concatenated mafs from a previous import folder if merge_maf is provided
+    
+#     Parameters
+#     ----------
+#     - mafdir (str): Directory containing the maf files
+#     - outputfile (str): Path to the concatenated maf file (unzipped)
+#     - merge_maf (str | None): Path the maf file that need to be merged or None
+#     '''
+     
+#     # make a list of maf files
+#     maffiles = [os.path.join(mafdir, i) for i in os.listdir(mafdir) if '.maf.gz' in i]
+#     # get the header of the maf file
+#     if maffiles:
+#         header = get_maf_header(maffiles[0])
+#     elif merge_maf:
+#         infile = open(merge_maf)
+#         header = infile.readline().rstrip()
+#         infile.close()
+    
+#     newfile = open(outputfile, 'w')
+#     newfile.write(header + '\n')
+#     for file in maffiles:
+#         # get the sample name from the file name
+#         sample = get_sample_from_filename(file)
+#         # read the content of the file
+#         infile = gzip.open(file, 'rt')
+#         # skip header
+#         for line in infile:
+#             if 'version' not in line and 'Hugo_Symbol' not in line:
+#                 line = line.rstrip()
+#                 if line != '':
+#                     line = line.split('\t')
+#                     # replace column 'Tumor_Sample_Barcode' with sample name
+#                     line[15] = sample
+#                     # write to temp file
+#                     newfile.write('\t'.join(line) + '\n')
+#         infile.close() 
+    
+#     # add concatenated mafs from previous import folder
+#     if merge_maf:
+#         infile = open(merge_maf)
+#         # skip header
+#         infile.readline()
+#         # get all the mutations
+#         content = infile.read()
+#         infile.close()
+#         newfile.write(content)
+       
+#     newfile.close()
+
+
+
+def concatenate_maf_files(mafdir, outputfile):
     '''
-    (str, str, str | None) -> None
+    (str, str) -> None
     
     Concatenates all the gzipped maf files in mafdir into a text file outputfile
     with column Tumor_Sample_Barcode replaced by the sample name.
-    Also merge the concatenated mafs from a previous import folder if merge_maf is provided
-    
+        
     Parameters
     ----------
     - mafdir (str): Directory containing the maf files
     - outputfile (str): Path to the concatenated maf file (unzipped)
-    - merge_maf (str | None): Path the maf file that need to be merged or None
     '''
      
     # make a list of maf files
@@ -1993,11 +2518,7 @@ def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
     # get the header of the maf file
     if maffiles:
         header = get_maf_header(maffiles[0])
-    elif merge_maf:
-        infile = open(merge_maf)
-        header = infile.readline().rstrip()
-        infile.close()
-    
+        
     newfile = open(outputfile, 'w')
     newfile.write(header + '\n')
     for file in maffiles:
@@ -2017,18 +2538,7 @@ def concatenate_maf_files(mafdir, outputfile, merge_maf=None):
                     newfile.write('\t'.join(line) + '\n')
         infile.close() 
     
-    # add concatenated mafs from previous import folder
-    if merge_maf:
-        infile = open(merge_maf)
-        # skip header
-        infile.readline()
-        # get all the mutations
-        content = infile.read()
-        infile.close()
-        newfile.write(content)
-       
-    newfile.close()
-
+    
                 
 def removed_filtered_data(outputfile, removed_things, header):
     '''
@@ -2766,16 +3276,53 @@ def get_token(token_file):
     return oncokb_token
 
 
-def check_input_mafs(mapfile, merge_maf = None):
+# def check_input_mafs(mapfile, merge_maf = None):
+#     '''
+#     (str, str | None) -> None
+    
+#     Exits if the input maf files have different headers
+        
+#     Parameters
+#     ----------
+#     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
+#     - merge_maf (str | None): Path the maf file that need to be merged or None 
+#     '''
+
+#     # make a list of input maf files 
+#     mafs = extract_files_from_map(mapfile, 'maf')
+    
+#     # make a list of file headers
+#     headers = []
+#     if mafs:
+#         for file in mafs:
+#             infile = gzip.open(file, 'rt')
+#             for line in infile:
+#                 if 'Hugo_Symbol' in line:
+#                     headers.append(line.rstrip())
+#                     break
+#             infile.close()
+    
+#     if merge_maf:
+#         infile = open(merge_maf)
+#         for line in infile:
+#             if 'Hugo_Symbol' in line:
+#                 headers.append(line.rstrip())
+#                 break
+#         infile.close()
+               
+#     # check if multiple headers
+#     if len(list(set(headers))) > 1:
+#         sys.exit('Input MAF files have different headers')
+    
+def check_input_mafs(mapfile):
     '''
-    (str, str | None) -> None
+    (str) -> None
     
     Exits if the input maf files have different headers
         
     Parameters
     ----------
     - mapfile (str): Mapping file (map.csv) that contains paths to maf, seg, gep and mavis files    
-    - merge_maf (str | None): Path the maf file that need to be merged or None 
     '''
 
     # make a list of input maf files 
@@ -2792,18 +3339,9 @@ def check_input_mafs(mapfile, merge_maf = None):
                     break
             infile.close()
     
-    if merge_maf:
-        infile = open(merge_maf)
-        for line in infile:
-            if 'Hugo_Symbol' in line:
-                headers.append(line.rstrip())
-                break
-        infile.close()
-               
     # check if multiple headers
     if len(list(set(headers))) > 1:
         sys.exit('Input MAF files have different headers')
-    
 
 
 def get_directories(outdir):
@@ -3313,10 +3851,323 @@ def copy_resource(file, destination_dir):
     
 
 
+def concatenate_input_files(mapfile, outdir, datatype, file_name):
+    '''
+    (str, str, str, str) -> str
+    
+    Concatenate all the input files corresponding to a particular data type from the 
+    map file into file_name located in the appropriate data directory in outdir
+    and return the path of the concatenated file
+
+    Parameters
+    ----------
+    - mapfile (str): Path to the mapping file with input data
+    - outdir (str): Path to the output directory 
+    - datatype (str): Type of the data being processed
+                      Accepted values are: maf, seg, gep and fus     
+    - file_name (str): Name of the concatenated filewith all input data
+    '''
+    
+    # extract data files from map file
+    datafiles = extract_files_from_map(mapfile, datatype)
+    # get the data directory
+    inputdir = '{0}dir'.format(datatype)
+    datadir = os.path.join(outdir, inputdir)
+    if datafiles:
+        assert os.path.isdir(datadir)
+        # concatenate input files
+        concatenated_file = os.path.join(datadir, file_name)
+        if datatype == 'maf':
+            concatenate_maf_files(datadir, concatenated_file)
+        elif datatype == 'seg':
+            concatenate_seg_files(datadir, concatenated_file)    
+        elif datatype == 'fus':
+            concatenate_fusion_files(datadir, concatenated_file)
+            # check if fusion data
+            if check_fusion_data(concatenated_file) == False:
+                concatenated_file = ''
+                print('no fusion data in concatenated fusion file')    
+        elif datatype == 'gep':
+            concatenate_fpkm_from_gep_files(datadir, concatenated_file)
+        # print message when done
+        if datatype == 'gep':
+            print('concatenated fpkm from gep files')    
+        else:
+            print('concatenated {0} files'.format(datatype))
+    else:
+        concatenated_file = ''
+    
+    return concatenated_file
 
 
 
 def make_import_folder(args):
+    '''
+    (list) -> None
+    
+    Generate folder cbioportal_import_folder with metadata and processed data files
+    to upload to cBioPortal
+        
+    Parameters
+    ----------
+    - config (str): Path to the config file
+    - clinical (str): Path to the sample clinical file
+    '''
+    
+    if os.path.isfile(args.config) == False:
+        sys.exit('Provide a valid config file')
+    if args.clinical:
+        if os.path.isfile(args.clinical) == False:
+            sys.exit('Provide a valid clinical file')
+        
+    # parse config file
+    config = configparser.ConfigParser(allow_no_value=True)
+    config.read(args.config)
+    # check config
+    check_configuration(config)
+    print('read and checked config')
+    
+    # extract variables from config
+    token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
+    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
+    gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
+    depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
+    print('extracted variables from config')
+    
+    # copy config file to out directory
+    copy_resource(args.config, outdir)
+    copy_resource(mapfile, outdir)
+
+    # check that input maf files, if any, have the same format and the same header
+    check_input_mafs(mapfile)
+    
+    # check genome version in the maf files, if provided
+    check_genome_version(mapfile, genome)
+    
+    # get genome specific variables
+    if genome == 'hg38':
+        enscon, genebed = enscon_hg38, genebed_hg38
+    elif genome == 'hg19':
+        enscon, genebed = enscon_hg19, genebed_hg19
+    print('determined genome specific resources')
+        
+    # check that cancer type is correctly defined
+    check_cancer_type(cancer_code)
+    print('checked cancer code')
+
+    # create output directory and output sub-folders. remove output directory if it exists
+    cbiodir, casedir, suppdir = create_output_directories(outdir)
+    print('created output directories')
+
+    # create input directories for each file type from map file    
+    create_input_directories(outdir, mapfile)
+    print('created input directories')
+    
+    # write meta study and clinical files
+    write_meta_study(os.path.join(cbiodir, 'meta_study.txt') , study, project_name, description, genome, cancer_code)
+    write_meta_clinical(cbiodir, project_name, 'sample')
+    write_meta_clinical(cbiodir, project_name, 'patient')
+    print('wrote study and clinical metadata')    
+    
+    # write cases
+    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), project_name, mapfile, 'seq')
+    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), project_name, mapfile, 'rna')
+    write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, mapfile, 'cna')
+    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, mapfile, 'cna_seq')
+    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, mapfile, 'cna_seq_rna')
+    write_cases(os.path.join(casedir, 'cases_sv.txt'), project_name, mapfile, 'sv')
+    print('wrote cases')
+
+    # write patient clinical information
+    clinical_outputfile = os.path.join(cbiodir, 'data_clinical_patients.txt')
+    write_patient_minimal_clinical_information(clinical_outputfile, mapfile, center)
+    
+    # get the user defined sample clinical information
+    clinical_info = get_clinical_data(args.clinical) if args.clinical else None
+    clinical_outputfile = os.path.join(cbiodir, 'data_clinical_samples.txt')
+    write_sample_minimal_clinical_information(clinical_outputfile, mapfile, center, sample_info = clinical_info)
+    print('wrote clinical information')
+    
+    # write clinical input file for oncokb-annotator
+    clinical_oncokb = os.path.join(suppdir, 'oncokb_clinical_info.txt')
+    write_clinical_oncokb(clinical_oncokb, mapfile, cancer_code)
+    print('wrote oncoKb clinical information') 
+    
+    
+    # link files and get the data directories
+    datadirs = []
+    for i in ['maf', 'seg', 'gep', 'fus']:
+        link_files(outdir, mapfile, i)
+        datadirs.append(os.path.join(outdir, '{0}dir'.format(i)))
+    for i in datadirs:
+        assert os.path.isdir(i)
+    mafdir, segdir, gepdir, fusdir = datadirs
+    print('linked files to input directories')
+     
+    # concatenate input files
+    # concatenate VEP maf files into outdir/mafdir/all_mutations.maf.txt
+    mutation_file = concatenate_input_files(mapfile, outdir, 'maf', 'all_mutations.maf.txt')
+    # concatenate purple or sequenza segmentation files into outdir/segdir/input.seg.txt
+    segfile = concatenate_input_files(mapfile, outdir, 'seg', 'input.seg.txt')
+    # concatenate mavis fusion files into outdir/fusdir/input.fus.txt
+    fusfile = concatenate_input_files(mapfile, outdir, 'fus', 'input.fus.txt')
+    # extract and concatenate fpkm from gep files
+    gepfile = concatenate_input_files(mapfile, outdir, 'gep', 'input.fpkm.txt')
+    
+       
+    # filter maf files and write metadata
+    # define maffile, output of MafAnnotator
+    if mutation_file:
+        maffile = os.path.join(mafdir, 'input.maf.txt')
+        # filter mutations and indels if option is activated
+        if filter_variants:
+            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants, os.path.join(mafdir, 'filtered.mutations.removed.txt'))
+            print("before mutations filtering: ", total)
+            print("after mutations filtering: ", kept)
+            print('filtered variants')
+        # filter indels if option is activated
+        if filter_indels:
+            # check if variants are filtered
+            if filter_variants:
+                maf_to_filter = os.path.join(mafdir, 'filtered.mutations.txt')
+                maf_filtered = os.path.join(mafdir, 'filtered.mutations.indels.txt')
+                maf_rem = os.path.join(mafdir, 'filtered.mutations.indels.remove.txt')
+            else:
+                maf_to_filter = os.path.join(mafdir, 'all_mutations.maf.txt')
+                maf_filtered = os.path.join(mafdir, 'filtered.indels.txt')
+                maf_rem = os.path.join(mafdir, 'filtered.indels.remove.txt')
+            # output file for MafAnnotator
+            maf_input_annotation = maf_filtered
+            total, kept = remove_indels(maf_to_filter, maf_filtered, maf_rem)
+            print("before indel filtering: ", total)
+            print("after indel filtering: ", kept)
+            print('filtered indels')
+        else:
+            if filter_variants:
+                maf_input_annotation = os.path.join(mafdir, 'filtered.mutations.txt')    
+            else:
+                print('kept all variants')
+                maf_input_annotation = os.path.join(mafdir, 'all_mutations.maf.txt')
+     
+        # get oncokb token
+        oncokb_token = get_token(token)
+    
+        # annotate mafs with oncokb-annotate        
+        maf_annotation = subprocess.call('MafAnnotator -i {0} -o {1} -c {2} -b {3}'.format(maf_input_annotation, maffile, os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell=True)
+        # check exit code
+        if maf_annotation:
+            sys.exit('Error when running MafAnnotator.')
+        else:
+            print('Annotated variants with MafAnnotator')
+    
+        # generate mutations data
+        print('Processing Mutation data from {0}'.format(maffile))
+        # only do the filtering steps if tglpipe is set to TRUE
+        if tglpipe:
+            print('tglpipe is set to true, filtering data according to tgl specifications')
+            df_cbio_anno = procVEP(maffile)
+            df_cbio_filt = df_cbio_anno[df_cbio_anno['TGL_FILTER_VERDICT'] == 'PASS']
+            # get snvs for dcsigs
+            df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
+            # for cbioportal input
+            df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
+            # unfiltered data
+            df_cbio_anno.to_csv(os.path.join(suppdir, 'unfiltered_data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
+        else:
+            df_cbio_filt = pd.read_csv(maffile, sep="\t", header=0)
+            df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
+            df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
+
+        # write metadata file
+        write_metadata(os.path.join(cbiodir, 'meta_mutations_extended.txt'), project_name, 'maf', genome)
+        print('wrote mutations metadata')
+    
+    # generate CNA data and metadata files if input segmentation file exists
+    if segfile:
+        # generate metadata files
+        # write cna metadata
+        write_metadata(os.path.join(cbiodir, 'meta_CNA.txt'), project_name, 'discrete', genome)    
+        write_metadata(os.path.join(cbiodir, 'meta_log2CNA.txt'), project_name, 'log2-value', genome)    
+        write_metadata(os.path.join(cbiodir, 'meta_segments.txt'), project_name, 'seg', genome) 
+        print('wrote CNA metadata files')
+        if genelist:
+            print('Restricting CNAs to the list of genes provided in {0}'.format(genelist))
+          
+        # function returns list of 3 objects
+        print('Processing CNA data from {0}'.format(segfile))
+        segData, df_cna, df_cna_thresh = preProcCNA(segfile, genebed, gain, amplification, heterozygous_deletion, homozygous_deletion, oncolist, genelist)
+        # write cbio files
+        print('writing seg file')
+        segData.to_csv(os.path.join(cbiodir, 'data_segments.txt'), sep='\t', index=False)
+        df_cna.to_csv(os.path.join(cbiodir, 'data_log2CNA.txt'), sep='\t', index=True)
+        df_cna_thresh.to_csv(os.path.join(cbiodir, 'data_CNA.txt'), sep='\t', index=True)
+        # write the truncated data_CNA file (remove genes which are all zero) for oncoKB annotator
+        df_CNA = df_cna_thresh.loc[~(df_cna_thresh == 0).all(axis=1)]
+        df_CNA.to_csv(os.path.join(suppdir, 'data_CNA_short.txt'), sep='\t', index=True)
+    
+    
+    # generate expression data and metadata file if input file exists
+    if gepfile:
+        # write metadata files
+        write_metadata(os.path.join(cbiodir, 'meta_expression.txt'), project_name, 'expression', genome)
+        write_metadata(os.path.join(cbiodir, 'meta_expression_zscores.txt'), project_name, 'zscore', genome)
+        print('wrote expression metadata files')
+        # write all samples with rna data to file 
+        gep_study_file = os.path.join(outdir, 'gep_study.list')
+        list_gep_samples(gepdir, gep_study_file)
+        # generate expression data files
+        print('Processing RNASEQ data from {0}'.format(gepfile))
+        # get list of samples in study
+        study_samples = readGep(gep_study_file)
+        # preprocess the full data frame
+        df = preProcRNA(gepfile, enscon, genelist)
+        print('getting STUDY-level data')
+        # subset data to STUDY level data for cbioportal
+        df_study = df[study_samples]
+        # write the raw STUDY data
+        df_study.to_csv(os.path.join(cbiodir, "data_expression.txt"), sep="\t", header=True, index=True)
+        # z-scores STUDY
+        df_zscore = compZ(df_study)
+        df_zscore.to_csv(os.path.join(cbiodir, "data_expression_zscores.txt"), sep="\t", header=True, index=True)
+        print('wrote expression data files')        
+    
+    # generate fusion data and metadata if input file exists
+    if fusfile:
+        # write SV metadata
+        write_metadata(os.path.join(cbiodir, 'meta_sv.txt'), project_name, 'sv', genome)
+        print('wrote SV metadata')
+        # process the fusion file
+        fusion_cbio = preProcFus(fusfile, minfusionreads, entcon)
+        # write fusion file
+        data_fusion = os.path.join(cbiodir, "data_fusions.txt")
+        fusion_cbio.to_csv(data_fusion, sep="\t", index=False)
+        print('wrote fusion data files')
+        # convert fusion file to SV format
+        # get the path to sv file
+        data_sv = os.path.join(cbiodir, "data_sv.txt")
+        # convert to sv file
+        convert_fusion_to_sv(data_fusion, data_sv)
+        # move fusion file to supplementary directory
+        if os.path.isfile(data_fusion):
+            new_data_fusion = os.path.join(suppdir, os.path.basename(data_fusion))
+            os.rename(data_fusion, new_data_fusion)     
+                    
+    # annonate CNA files with oncoKb for supplementary interpretation data
+    # check that CNA data file is generated
+    if os.path.isfile(os.path.join(suppdir, 'data_CNA_short.txt')):
+        cna_annotation = subprocess.call('CnaAnnotator -i {0} -o {1} -c {2} -b {3}'.format(os.path.join(suppdir, 'data_CNA_short.txt'), os.path.join(suppdir, 'data_CNA_oncoKB.txt'), os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell = True)  
+        if cna_annotation:
+            sys.exit('Error when running CnaAnnotator.')
+        else:
+            print('Annotated CNAs with CnaAnnotator')
+    else:
+        print('WARNING. File {0} does not exist. Skipping CNA annotation'.format(os.path.join(suppdir, 'data_CNA_short.txt')))
+
+    print('Success! Data in the cbioportal import folder is ready for upload.')
+
+
+
+def merge_import_folder(args):
     '''
     (list) -> None
     
@@ -3350,10 +4201,20 @@ def make_import_folder(args):
     copy_resource(args.config, outdir)
     copy_resource(mapfile, outdir)
 
-        
-        
-        
+    # check merging options
+
+
+
+    ### list files that need to be combined
     
+    
+    ### check files with different options --> when indels are removed and not removed
+    
+    
+    
+        
+        
+    #### option to merge even if filtering parameters are different
     
     
     
@@ -3695,6 +4556,37 @@ def make_import_folder(args):
     print('Success! Data in the cbioportal import folder is ready for upload.')
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def generate_mapfile(args):
     '''
     (str, str)
@@ -3775,12 +4667,31 @@ if __name__ == '__main__':
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
     g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
-    g_parser.add_argument('--append', dest='append_data', action='store_true', help='Create an import folder by merging data from an existing import folder if True')
-    g_parser.add_argument('-mid', '--MergeImportDirectory', dest='merge_import_folder', help='Path to the previous import folder in which data should be merged')
-    g_parser.add_argument('-rs', '--RemovedSamples', dest='removed_samples', help='Path to the files with samples to be excluded')
     g_parser.set_defaults(func=make_import_folder)
     
-    # generate import folder
+    
+    # merge import folders
+    mg_parser = subparsers.add_parser('merge', help="Merge previous import folders")
+    mg_parser.add_argument('-configs', dest='configs', nargs = '*', help="White space separated list of paths to config files", required = True)
+    
+    mg_parser.add_argument('-importFolders', dest='import_folders', nargs = '*', help="White space separated list of paths to impot folders", required = True)
+    
+    mg_parser.add_argument('-o', '--outdir', dest='outdir', help='Path to the output directory', required = True)
+                           
+                           
+    mg_parser.add_argument('-rs', '--RemovedSamples', dest='removed_samples', help='Path to the files with samples to be excluded')
+                           
+    
+    
+    
+    
+    
+    mg_parser.set_defaults(func=merge_import_folder)
+    
+    
+    
+    
+    # generate maping file
     m_parser = subparsers.add_parser('map', help="Generate map file")
     m_parser.add_argument('-o', '--outdir', dest='outdir', help='Path to the output directory', required = True)
     m_parser.add_argument('-i', '--input_data', dest='input_data', help='Path to the json file with input data', required = True)
