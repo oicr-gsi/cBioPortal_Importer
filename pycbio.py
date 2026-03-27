@@ -3464,34 +3464,56 @@ def get_data_to_merge(append_data, merge_import_folder):
 
 
 
-def get_samples_merge(append_data, merge_import_folder, case_file):
+# def get_samples_merge(append_data, merge_import_folder, case_file):
+#     '''
+#     (bool, str, str) -> list
+    
+#     Returns a list of case samples extracted from the case_file of a previous import folder
+    
+#     - append_data (bool): Create an import folder by merging data from an existing import folder if True
+#     - merge_import_folder (str): Path to the previous import folder in which data should be merged
+#     - case_file (str): Name of the case file.The type of data considered.
+#                        Values accepted are: cases_sequenced.txt, cases_rna_seq_mrna.txt,
+#                        cases_cna.txt, cases_cnaseq.txt, cases_3way_complete.txt, cases_sv.txt
+#     '''
+    
+#     samples = []
+    
+#     # get raw data to merge (concatenated files before any filtering and processing) 
+#     if append_data:
+#         # get expected folders in the import folder
+#         merge_cbiodir, merge_casedir, merge_suppdir, merge_mafdir, merge_segdir, merge_gepdir, merge_fusdir = get_directories(merge_import_folder)
+#         filepath = os.path.join(merge_casedir, case_file)
+#         if os.path.isfile(filepath):
+#             infile = open(filepath)
+#             content = infile.read().rstrip().split('\n')
+#             infile.close()
+#             samples = content[-1].split(':')[1]
+#             samples = list(map(lambda x: x.strip(), samples.split('\t')))
+    
+#     return samples                    
+
+
+
+def extract_samples_case_file(case_file):
     '''
-    (bool, str, str) -> list
+    (str) -> list
     
     Returns a list of case samples extracted from the case_file of a previous import folder
-    
-    - append_data (bool): Create an import folder by merging data from an existing import folder if True
-    - merge_import_folder (str): Path to the previous import folder in which data should be merged
-    - case_file (str): Name of the case file.The type of data considered.
-                       Values accepted are: cases_sequenced.txt, cases_rna_seq_mrna.txt,
+        
+    - case_file (str): Path to the case file located in folder cbioportal_import_data/case_lists/
+                       Possible files are: cases_sequenced.txt, cases_rna_seq_mrna.txt,
                        cases_cna.txt, cases_cnaseq.txt, cases_3way_complete.txt, cases_sv.txt
     '''
     
-    samples = []
-    
-    # get raw data to merge (concatenated files before any filtering and processing) 
-    if append_data:
-        # get expected folders in the import folder
-        merge_cbiodir, merge_casedir, merge_suppdir, merge_mafdir, merge_segdir, merge_gepdir, merge_fusdir = get_directories(merge_import_folder)
-        filepath = os.path.join(merge_casedir, case_file)
-        if os.path.isfile(filepath):
-            infile = open(filepath)
-            content = infile.read().rstrip().split('\n')
-            infile.close()
-            samples = content[-1].split(':')[1]
-            samples = list(map(lambda x: x.strip(), samples.split('\t')))
+    infile = open(case_file)
+    content = infile.read().rstrip().split('\n')
+    infile.close()
+    samples = content[-1].split(':')[1]
+    samples = list(map(lambda x: x.strip(), samples.split('\t')))
     
     return samples                    
+
 
 
 def check_fusion_data(fusfile):
@@ -3901,6 +3923,573 @@ def concatenate_input_files(mapfile, outdir, datatype, file_name):
 
 
 
+
+
+def get_paths(paths):
+    '''
+    (str) -> list
+    
+    Returns a list of paths to files or directories contained in file paths
+    
+    Parameters
+    ----------
+    - paths (str): Path to the file containing file or folder paths
+    '''
+
+    infile = open(paths)
+    L = infile.read().rstrip().split('\n')
+    infile.close()
+
+    return L
+
+
+def check_configs_import_folders(config_files, import_folders):
+    '''
+    (list, list) -> None
+    
+    Exits if config files and import folders are not conform
+    
+    Parameters
+    ----------
+    - config_files (list): List of paths to config files of import folders to merge
+    - import_folders (list): List of paths to import folders to merge
+    '''
+
+    if len(config_files) == 0:
+        sys.exit('No specified config files. Use -configs or -configPaths')
+    if len(import_folders) == 0:
+        sys.exit('No specified import folders. Use -importFolders or -importPaths')
+
+    # check that numbers of import folders and config files match        
+    if len(config_files) > len(import_folders):
+        missing = len(config_files) - len(import_folders) 
+        sys.exit('Missing {0} import folders'.format(missing))
+    elif len(config_files) < len(import_folders):
+        missing = len(import_folders) - len(config_files) 
+        sys.exit('Missing {0} config files'.format(missing))
+
+    # check that config files are valid
+    if all(map(lambda x: os.path.isfile(x), config_files)) == False:
+        invalid = list(map(lambda x: os.path.isfile(x), config_files)).count(False)
+        sys.exit('{0} config files have invalid paths'.format(invalid))    
+    # check that import folders are valid
+    if all(map(lambda x: os.path.isdir(x), import_folders)) == False:
+        invalid = list(map(lambda x: os.path.isdir(x), import_folders)).count(False)
+        sys.exit('{0} import folders have invalid paths'.format(invalid))    
+
+
+
+
+def collect_config_parameters(config_files):
+    '''
+    (list) -> dict
+     
+    Retuens a dictionary with lists of parameter values across config files
+    
+    Parameters
+    ----------
+    - config_files (list): List of config files of import folders to merge
+    '''
+    
+    # collect the parameters across all config files  
+    cancer_codes, genomes = [], []
+    project_names, studies, descriptions = [], [], []
+    gains, amplis, hetdel, homdel = [], [], [], []
+    fusreads, dfilters, altfilters, gnomADfilters = [], [], [], []
+    tglfilters, filterVariants, filterIndels, keepVariants = [], [], [], []
+    
+    # collect all parameters
+    for file in config_files:
+        # parse config file
+        config = configparser.ConfigParser(allow_no_value=True)
+        config.read(file)
+        # check config
+        check_configuration(config)
+        mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
+        gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
+        depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
+        
+        cancer_codes.append(cancer_code)
+        genomes.append(genome)
+        project_names.append(project_name)
+        studies.append(study)
+        descriptions.append(description)
+        gains.append(gain)
+        amplis.append(amplification)
+        hetdel.append(heterozygous_deletion)
+        homdel.append(homozygous_deletion)
+        fusreads.append(minfusionreads)
+        dfilters.sppend(depth_filter)
+        altfilters.append(alt_freq_filter)
+        gnomADfilters.append(gnomAD_AF_filter)
+        tglfilters.append(tglpipe)
+        filterVariants.append(filter_variants)
+        filterIndels.append(filter_indels)
+        keepVariants.append(keep_variants)
+    
+        
+    L = [cancer_codes, genomes, project_names, studies, descriptions,
+         gains, amplis, hetdel, homdel, fusreads, dfilters, altfilters,
+         gnomADfilters, tglfilters, filterVariants, filterIndels, keepVariants]
+    parameters = ['cancer_code', 'genome', 'project_name', 'study', 'description',
+                  'gain', 'amplification', 'heterozygous_deletion', 'homozygous_deletion',
+                  'minfusionreads', 'depth_filter', 'alt_freq_filter', 'gnomAD_AF_filter',
+                  'tglpipe', 'filter_variants', 'filter_indels', 'keep_variants']
+    
+    D = {}
+    for i in range(len(L)):
+        D[parameters[i]] = list(set(L[i])) 
+    
+    return D
+
+
+
+def check_config_parameters(D):
+    '''
+    (dict) -> (bool, list)    
+    
+    Returns True if parameters are the same across the config files and False otherwise,
+    and also returns a list of parameters with differences
+    
+    Parameters
+    ----------
+    - D (dict): Dictionaries with parameters extracted from config files
+    '''
+
+    # set parameter to evaluate that all parameters are the same across configs
+    same_parameters = True
+    
+    # does not evaluate genome
+    parameters = ['cancer_code', 'project_name', 'study', 'description', 'gain', 'amplification',
+                  'heterozygous_deletion', 'homozygous_deletion', 'minfusionreads', 'depth_filter',
+                  'alt_freq_filter', 'gnomAD_AF_filter', 'tglpipe', 'filter_variants', 'filter_indels',
+                  'keep_variants']
+    
+    # report parameter with differences     
+    
+    differences = []
+    for i in parameters:
+        if len(D[i]) > 1:
+            # update boolean, configs have different parameters
+            same_parameters = False
+            differences.append(i)
+        
+    return same_parameters, differences
+
+
+
+
+def check_genome(D, genome):
+    '''
+    (dict, str) -> None
+    
+    Exits if the reference genome does not match the genome from config files
+    or if multiple genome references are specified in the config files.
+    
+    Parameters
+    ----------
+    - D (dict): Dictionary with parameters extracted from the config files of the import folders to be merged
+    - genome (str): Reference genome
+    '''
+    
+    
+    if len(D['genome']) > 1:
+        sys.exit('The config files have different genomes: {0}'.format(';'.join(D['genome'])))
+    elif len(D['genome']) == 0:
+        sys.exit('The config files do not have genomes')
+    elif D['genome'][0] != genome:
+        sys.exit('''Attempting to merge data with different genome references.
+                 ({0} from command, {1} from configs)'''.format(genome, D['genome'][0]))
+
+
+def check_metadata(D, metadata, metadata_type):
+    '''
+    (dict, str, str) -> None
+    
+    Print a warning if the metadata specified in the command does not match the
+    metadata from config files if multiple values are specified in the config files.
+    
+    Parameters
+    ----------
+    - D (dict): Dictionary with parameters extracted from the config files of the import folders to be merged
+    - metadata (str): Cancer code, project, study name or description 
+    - metadata_type (str): The type of metadata to check (cancer_code, project_name, project_name)
+    '''
+    
+    name = ' '.join(metadata_type.split('_'))
+    vals = ';'.join(D[metadata_type])
+    
+    if len(D[metadata_type]) > 1:
+        print('WARNING: The config files have different {0}s: {1}'.format(name, vals))
+    elif len(D[metadata_type]) == 0:
+        print('WARNING: The config files do not have {0}s'.format(name))
+    elif D[metadata_type][0] != metadata:
+        print('''WARNING: Attempting to merge data with different {0}s. 
+                 ({1} from command, {2} from configs)'''.format(name, metadata, vals))
+       
+
+def group_files(import_folders, case_list = False):
+    '''
+    (list, bool) -> dict
+    
+    
+    Returns a dictionary with list of file paths for each expected file name
+    in the import folder or in the case_lists folder if case_list is True
+        
+    Parameters
+    ----------
+    - import_folders (list): List of import folders to merge
+    - case_list (bool): Get the files in the case_lists folder is True 
+                        and in the import folder if False
+    '''
+
+    D = {}
+
+    for i in import_folders:
+        if case_list:
+            # get the files in case_lists folder
+            folder = os.path.join(i, 'case_lists')
+        else:
+            folder = i
+        files = [os.path.join(folder, j) for j in os.listdir(folder)]
+        for file in files:
+            filename = os.path.basename(file)
+            if filename in D:
+                D[filename].append(file)
+            else:
+                D[filename] = [file]
+    
+    return D  
+
+
+
+
+
+
+def merge_case_files(case_dir, import_folders, project_name):
+    '''
+    (str, list, str)
+    
+    Extract samples from each case file in case_lists directory of the import folders
+    and write a new case file in the case_dir merging all samples from previous import folders
+    
+    Parameters
+    ==========
+    - case_dir (str): Path to the case_lists directory where the merged case file is written
+    - import_folders (list): List of paths to import folders to merge
+    - project_name (str): Name of the project
+    '''
+    
+    # get the list of files to merge in the case_lists folder
+    case_lists_files = group_files(import_folders, True)
+
+    # collect samples for each type of case file and write a new case file to case_dir
+    for filename in case_lists_files:
+        # extract samples from each file corresponding to the file name
+        samples = []
+        for case_file in case_lists_files[filename]:
+            samples.extend(extract_samples_case_file(case_file))
+
+        if filename == 'cases_sequenced.txt':
+            name = 'Samples profiled for mutations'
+            description = 'This is this case list that contains all samples that are profiled for mutations.'
+            stable_id = '{0}_sequenced'.format(project_name)
+        elif filename == 'cases_rna_seq_mrna.txt':
+            name = 'Samples profiled for rnaseq'
+            description = 'This is this case list that contains all samples that are profiled for rnaseq.'
+            stable_id = '{0}_rna_seq_mrna'.format(project_name)    
+        elif filename == 'cases_cna.txt':
+            name = 'Samples profiled for cnas'
+            description = 'This is this case list that contains all samples that are profiled for cnas.'
+            stable_id = '{0}_cna'.format(project_name)
+        elif filename == 'cases_cnaseq.txt':
+            name = 'Samples profiled for cnas and sequencing'
+            description = 'This is this case list that contains all samples that are profiled for mutations and cnas.'
+            stable_id = '{0}_cnaseq'.format(project_name)
+        elif filename == 'cases_3way_complete.txt':
+            name = 'Samples profiled for all of mutation, cnas, and rnaseq'
+            description = 'This is this case list that contains all samples that are profiled for mutations, cnas, and rnaseq.'
+            stable_id = '{0}_3way_complete'.format(project_name)
+        elif filename == 'cases_sv.txt':
+            name = 'Samples profiled for structural variants'
+            description = 'This is this case list that contains all samples that are profiled for structural variants.'
+            stable_id = '{0}_sv'.format(project_name)
+   
+        if samples:
+            # write outputfile if samples exist
+            outputfile = os.path.join(case_dir, filename)
+            newfile = open(outputfile, 'w')
+            L = ['cancer_study_identifier: {0}'.format(project_name),
+                 'stable_id: {0}'.format(stable_id),
+                 'case_list_name: {0}'.format(name),
+                 'case_list_description: {0}'.format(description),
+                 'case_list_ids: {0}'.format('\t'.join(samples))]
+            newfile.write('\n'.join(L))
+            newfile.close()
+
+
+
+
+
+
+
+
+
+
+
+def merge_meta_files(cbiodir, import_folders, project_name, study, description, genome, cancer_code):
+    '''
+    (str, list, str)
+    
+    Extract samples from each case file in case_lists directory of the import folders
+    and write a new case file in the case_dir merging all samples from previous import folders
+    
+    Parameters
+    ----------
+    - cbiodir (str): Path to the cbioportal_import_data folder 
+    - import_folders (list): List of paths to import folders to merge
+    - project_name (str): Name of the project
+    - study (str): Name of the study
+    - description (str): Study description
+    - genome (str): Reference genome    
+    - cancer_code (str): Oncotree cancer code
+    '''
+    
+    # get the list of files to merge in the import folder 
+    cbiofiles = group_files(import_folders, False)
+    
+    # keep only the metadata files
+    to_remove = [i for i in cbiofiles if not i.startswith('meta_')]
+    for i in to_remove:
+        del cbiofiles[i]
+    
+    if 'meta_study.txt' in cbiofiles:
+        write_meta_study(os.path.join(cbiodir, 'meta_study.txt'), study, project_name, description, genome, cancer_code)
+    if 'meta_clinical_samples.txt' in cbiofiles:
+        write_meta_clinical(cbiodir, project_name, 'sample')
+    if 'meta_clinical_patients.txt' in cbiofiles:
+        write_meta_clinical(cbiodir, project_name, 'patient')
+    
+    metafiles =  {'meta_mutations_extended.txt': 'maf',
+                  'meta_CNA.txt': 'discrete',
+                  'meta_log2CNA.txt': 'log2-value',
+                  'meta_segments.txt': 'seg',
+                  'meta_expression.txt': 'expression',
+                  'meta_expression_zscores.txt': 'zscore',
+                  'meta_sv.txt': 'sv'}
+    
+    for i in metafiles:
+        if i in cbiofiles:
+            write_metadata(os.path.join(cbiodir, i), project_name, metafiles[i], genome)
+    
+    print('wrote metadata files')
+    
+    
+    
+    
+    
+    
+    
+def get_simple_header(infile):
+    '''
+    (_io.TextIOWrapper) -> str
+    
+    Returns the header of the open file
+    
+    Parameters
+    ----------
+    infile : (_io.TextIOWrapper): File open for reading
+    '''    
+    
+    return infile.readline().rstrip()
+    
+
+def get_multiline_header(infile):
+    '''
+    (_io.TextIOWrapper) -> list
+    
+    Returns a list with all the lines of the file header
+    
+    Parameters
+    ----------
+    infile : (_io.TextIOWrapper): File open for reading
+    '''
+
+    header = []
+    for line in infile:
+        if line.startswith('#'):
+            header.append(line.rstrip())
+        else:
+            break
+    header.append(line.rstrip())
+     
+    return header
+    
+    
+def check_file_headers(cbiofiles):
+    '''
+    (dict) -> None
+    
+    Exits if data file headers are different (ie, cannot be merged)
+    
+    Parameters
+    ----------
+    - cbiofiles (dict): Dictionary with list of file paths for each expected
+                        file found in the import folders to merge
+    '''    
+    
+    # check header for each data file
+    D = {}
+        
+    for i in cbiofiles:
+        if i in ['data_mutations_extended.txt', 'data_segments.txt', 'data_sv.txt']:
+            D[i] = True
+            # get the header of the first file
+            infile = open(cbiofiles[i][0])
+            header = get_simple_header(infile)
+            infile.close()
+            for file in cbiofiles[i]:
+                infile = open(file)
+                h = get_simple_header(infile)
+                infile.close()
+                if header != h:
+                    D[i] = False
+        elif i in ['data_clinical_patients.txt', 'data_clinical_samples.txt']:
+            D[i] = True
+            infile = open(cbiofiles[i][0])
+            header = get_multiline_header(infile)
+            infile.close()
+            for file in cbiofiles[i]:
+                infile = open(file)
+                h = get_multiline_header(infile)
+                infile.close()
+                if header != h:
+                    D[i] = False        
+    
+    different_headers = [i for i in D if D[i] == False]
+    
+    if different_headers:
+        sys.exit('WARNING: Some data files have different headers and cannopt be merged: {0}'.format(';'.join(different_headers)))    
+    
+    
+def merge_expression_CNA_files(cbiodir, cbiofiles):
+    '''
+    (str, dict) -> None
+    
+    Merge expression and CNA data files into the cbiodir directory
+        
+    Parameters
+    ----------
+    - cbiodir (str): Path to the cbioportal_import_data folder 
+    - cbiofiles (dict): Dictionary with list of file paths for each expected
+                        file found in the import folders to merge
+    '''
+    
+    for i in cbiofiles:
+        if i in ['data_expressions.txt', 'data_expression_zscores.txt',
+                 'data_log2CNA.txt', 'data_CNA.txt']:
+            D = {}
+            for file in cbiofiles[i]:
+                infile = open(file)
+                header = infile.readline().rstrip().split('\t')
+                for line in infile:
+                    line = line.rstrip()
+                    if line:
+                        line = line.split('\t')
+                        gene = line[0]
+                        if gene not in D:
+                            D[gene] = {}
+                        for i in range(1, len(line)):
+                            sample = header[i]
+                            expression = line[i]
+                            D[gene][sample] = expression
+                infile.close()            
+                
+            if D:
+                h = ['Hugo_Symbol']
+                samples = []
+                for gene in D:
+                    samples.extend(list(D[gene].keys))
+                    samples = list(set(samples))
+                samples.sort()
+                h.extend(samples)
+                genes = sorted(D.keys())
+                newfile = open(os.path.join(cbiodir, i), 'w')
+                newfile.write('\t'.join(h) + '\n')
+                for gene in genes:
+                    L = [gene]
+                    for sample in samples:
+                        assert sample in D[gene]
+                        L.append(D[gene][sample])
+                    newfile.write('\t'.join(L) + '\n')
+                newfile.close()
+        
+    
+
+def merge_data_files(cbiodir, cbiofiles):
+    '''
+    (str, dict) -> None
+    
+    Merge data files into the cbiodir directory
+        
+    Parameters
+    ----------
+    - cbiodir (str): Path to the cbioportal_import_data folder 
+    - cbiofiles (dict): Dictionary with list of file paths for each expected
+                        file found in the import folders to merge
+    '''
+
+    for i in cbiofiles:
+        if i in ['data_mutations_extended.txt', 'data_segments.txt', 'data_sv.txt']:
+            data = []
+            for file in cbiofiles[i]:
+                infile = open(file)
+                header = infile.readline().rstrip()
+                content = infile.read().rstrip().split('\n')
+                infile.close()
+                data.extend(content)
+        
+            newfile = open(os.path.join(cbiodir, i), 'w')
+            newfile.write(header + '\n')
+            newfile.write('\n'.join(data))
+            newfile.close()
+        
+
+
+def merge_clinical_files(cbiodir, cbiofiles):
+    '''
+    (str, dict) -> None
+    
+    Merge clinical data files into the cbiodir directory
+        
+    Parameters
+    ----------
+    - cbiodir (str): Path to the cbioportal_import_data folder 
+    - cbiofiles (dict): Dictionary with list of file paths for each expected
+                        file found in the import folders to merge
+    '''
+
+    for i in cbiofiles:
+        if i in ['data_clinical_patients.txt', 'data_clinical_samples.txt']:
+            data = []
+            for file in cbiofiles[i]:
+                infile = open(file)
+                # collect multi line header
+                header = get_multiline_header(infile)
+                # keep trailing white space in lines (multiple tabs)
+                content = infile.read().split('\n')
+                infile.close()
+                while '' in content:
+                    content.remove('')
+                data.extend(content)
+                
+            newfile = open(os.path.join(cbiodir, i), 'w')
+            newfile.write('\n'.join(header))
+            newfile.write('\n'.join(data))
+            newfile.close()
+
+
+
 def make_import_folder(args):
     '''
     (list) -> None
@@ -4171,421 +4760,186 @@ def merge_import_folder(args):
     '''
     (list) -> None
     
-    Generate folder cbioportal_import_folder with metadata and processed data files
-    to upload to cBioPortal
         
     Parameters
     ----------
-    - config (str): Path to the config file
-    - clinical (str): Path to the sample clinical file
-    - append_data (bool): Create an import folder by merging data from an existing import folder if True
-    - merge_import_folder (str): Path to the previous import folder in which data should be merged
-    - removed_samples (str): Path to the files with samples to be excluded
+    - configs (list | None): List of paths to config files
+    - import_folders (list | None): List of paths to impot folders
+    - config_paths (str | None): File with paths to the config files of the import folders to merge
+    - import_paths (str): File with paths to the import folders to merge
+    - cancer_code (str): Cancer code. See http://oncotree.mskcc.org
+    - genome (str): Reference genome. hg19 or hg38
+    - merge_with_diferences (bool): Merges import folders with parameter differences if True. Default is False
+    - outdir (str): Path to the output directory
+    - center (str): Genomic center
+    - project (str): Name of the project
+    - description (str): Project description
+    - study (str): Format of the study name: Project: Top-level-OncoTree, Concept (PI, Centre) AcronymProject description
+    - exclude_samples (list | None): list of excluded samples
+    - exclude_file (str | None): Path to file with samples to exclude
     '''
     
-    # parse config file
-    config = configparser.ConfigParser(allow_no_value=True)
-    config.read(args.config)
-    # check config
-    check_configuration(config)
-    print('read and checked config')
     
-    # extract variables from config
-    token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
-    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
-    gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
-    depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
-    print('extracted variables from config')
-    
-    # copy config file to out directory
-    copy_resource(args.config, outdir)
-    copy_resource(mapfile, outdir)
+    # check that config files and import folders are specified
+    if (args.configs and args.config_paths) or (args.configs is None and args.config_paths is None):
+        sys.exit('Use -configs or -configPaths to specify the paths to the config files')    
+    if (args.import_folders and args.import_paths) or (args.import_folders is None and args.import_paths is None):
+        sys.exit('Use -importFolders or -importPaths to specify the paths to the import folders')    
+       
+    if  args.exclude_samples and args.exclude_file:
+        sys.exit('Use -excludeSamples or -excludeFile to remove samples from the final import folder')    
+       
+    # get import folders and config files
+    if args.configs:
+        config_files = args.configs
+    elif args.config_paths:
+        config_files = get_paths(args.config_paths)
+    if args.import_folders:
+        import_folders = args.import_folders
+    elif args.import_paths:
+        import_folders = get_paths(args.import_paths)
 
-    # check merging options
-
-
-
-    ### list files that need to be combined
-    
-    
-    ### check files with different options --> when indels are removed and not removed
-    
-    
-    
+    # check that config files and import folders are valid
+    check_configs_import_folders(config_files, import_folders)
         
-        
-    #### option to merge even if filtering parameters are different
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    # check that outdir is different than import folder dir
-    # check that correct options are used when merging data
-    check_merging_option(args.append_data, args.merge_import_folder, outdir)    
-    
-    # get raw data to merge (concatenated files before any filtering and processing) 
-    # if they exist, or empty strings
-    merge_maf, merge_seg, merge_fus, merge_gep = get_data_to_merge(args.append_data, args.merge_import_folder)
-    
-    # check that input maf files, if any, have the same format and the same header
-    check_input_mafs(mapfile, merge_maf)
-    
-    # check genome version in the maf files, if provided
-    check_genome_version(mapfile, genome, merge_maf)
-    # get genome specific variables
-    if genome == 'hg38':
-        enscon, genebed = enscon_hg38, genebed_hg38
-    elif genome == 'hg19':
-        enscon, genebed = enscon_hg19, genebed_hg19
-    print('determined genome specific resources')
-        
-    # check that cancer type is correctly defined
-    check_cancer_type(cancer_code)
+    # collect parameters
+    config_params = collect_config_parameters(config_files)
+    # check the parameters in the configs
+    same_parameters, differences = check_config_parameters(config_files)
+
+    # check genome
+    check_genome(config_params, args.genome)
+    print('checked genome')
+    # check resources
+    check_metadata(config_params, args.cancer_code, 'cancer_code')
+    check_metadata(config_params, args.project, 'project')
+    check_metadata(config_params, args.study, 'study')
+    check_metadata(config_params, args.description, 'description')
+    print('checked metadata')
+    check_cancer_type(args.cancer_code)
     print('checked cancer code')
 
-    # create output directory and output sub-folders. remove output directory if it exists
-    cbiodir, casedir, suppdir = create_output_directories(outdir)
-    print('created output directories')
 
-    # create input directories for each file type from map file    
-    create_input_directories(outdir, mapfile, merge_maf, merge_seg, merge_fus, merge_gep)
-    print('created input directories')
-        
-    # get the samples to exclude
-    check_exclude_option(args.removed_samples)
-    if args.removed_samples:
-        excluded_samples = parse_excluded_samples(args.removed_samples)
-        excluded_donors =  exclude_donors(mapfile, args.append_data, args.merge_import_folder, args.removed_samples)
-        print('Excluding {0} donors and {1} samples'.format(len(excluded_donors), len(excluded_samples)))
+    # check if merging is allowed if differences exist
+    if same_parameters == False and args.merge_with_differences == False:
+        sys.exit('''WARNING: Attempting to merge import folders with parameter differences.
+                 Parameters with differences in config files: {0}
+                 Use flag --merge_with_differences to force merging'''.format(';'.join(differences)))
     else:
-        print('All specified donors and samples are used.')
-        excluded_samples, excluded_donors = [], []
+        if same_parameters:
+            print('Merging import folders with identical parameters')
+        elif args.merge_with_differences:
+            print('''WARNING: Merging import folders with parameter differences.
+                  Parameters with differences in config files: {0}'''.format(';'.join(differences)))
+                 
+        # create output folders
+        cbiodir = os.path.join(args.outdir, 'cbioportal_import_data')
+        casedir = os.path.join(cbiodir, 'case_lists')
+        for i in [cbiodir, casedir]:
+            os.makedirs(i, exist_ok=True)
+        print('created output sub-folders:', cbiodir, casedir, sep = '\n')
+                
         
-    # write meta study and clinical files
-    write_meta_study(os.path.join(cbiodir, 'meta_study.txt') , study, project_name, description, genome, cancer_code)
-    write_meta_clinical(cbiodir, project_name, 'sample')
-    write_meta_clinical(cbiodir, project_name, 'patient')
-    print('wrote study and clinical metadata')    
-    
-    # write cases
-    merge_samples = [get_samples_merge(args.append_data, args.merge_import_folder, i) for i in   
-                     ['cases_sequenced.txt', 'cases_rna_seq_mrna.txt', 'cases_cna.txt',
-                      'cases_cnaseq.txt', 'cases_3way_complete.txt', 'cases_sv.txt']] 
-                        
-    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), project_name, mapfile, 'seq',
-                merge_samples = merge_samples[0], discarded_samples = excluded_samples)
-    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), project_name, mapfile, 'rna',
-                merge_samples = merge_samples[1], discarded_samples = excluded_samples)
-    write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, mapfile, 'cna',
-                merge_samples = merge_samples[2], discarded_samples = excluded_samples)
-    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, mapfile, 'cna_seq',
-                merge_samples = merge_samples[3], discarded_samples = excluded_samples)
-    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, mapfile, 'cna_seq_rna',
-                merge_samples = merge_samples[4], discarded_samples = excluded_samples)
-    write_cases(os.path.join(casedir, 'cases_sv.txt'), project_name, mapfile, 'sv',
-                merge_samples = merge_samples[5], discarded_samples = excluded_samples) 
-    print('wrote cases')
+        # get the list of samples to exclude
+        if  args.exclude_samples:
+            excluded_samples = args.exclude_samples
+        elif args.exclude_file:
+            infile = open(args.exclude_file)
+            excluded_samples = infile.read().rstrip().split('\n')
+            infile.close()
+        else:
+            excluded_samples = []
+        if excluded_samples:
+            print('Excluding {0} samples from the final data files'.format(len(excluded_samples)))
+        
+            
+        # get the list of files to merge in the import folder 
+        cbiofiles = group_files(import_folders, False)
+            
+        # check if the data files headers are the same (ie, files can be merged) 
+        check_file_headers(cbiofiles) 
+        
+        # write the case files in the cbioportal_import_data/case_lists folder
+        merge_case_files(casedir, import_folders, args.project)
+        print('Wrote case files')
+        
+        # write the metadata files in the cbioportal_import_data folder
+        merge_meta_files(cbiodir, import_folders, args.project, args.study, args.description, args.genome, args.cancer_code)
+        print('Wrote metadata files')
+
+        # merge mutation, sv and segment data files
+        merge_data_files(cbiodir, cbiofiles)
+        print('Merged mutation and SV data files')
+                
+        # merge clinical data files
+        merge_clinical_files(cbiodir, cbiofiles)
+        print('Merged clinical data files')
+        
+        # merge expression and CNA data files
+        merge_expression_CNA_files(cbiodir, cbiofiles)
+        print('Merged expression and CNA data files')
+
+           
+
+
+        # THINGS TO DO
+        # - remove excluded samples from the data files
+        # remove metadata files if data files do not excist because sampes have been excluded
+        # allow clinical merging of clinical files with different headers
+        # clinical_samples and clinical_patients may have custom fields: 
+        # enable merging of clinical files with different hears and fields
+        # do not include clinical data files when checking for header
+
+
 
     
-    # write patient clinical information
-    clinical_outputfile = os.path.join(cbiodir, 'data_clinical_patients.txt')
-    # get clinical file from previous import folder if merging
-    merge_patient_clinical_info = parse_clinical_patients(args.append_data, args.merge_import_folder, 'data_clinical_patients.txt')
-    write_patient_minimal_clinical_information(clinical_outputfile, mapfile, center,
-                                               merge_patient_clinical_info=merge_patient_clinical_info,
-                                               discarded_donors=excluded_donors)
+    ### check if merging of different clinical tables is allowed
+    
+    # clinical_outputfile = os.path.join(cbiodir, 'data_clinical_patients.txt')
+    # # get clinical file from previous import folder if merging
+    # merge_patient_clinical_info = parse_clinical_patients(args.append_data, args.merge_import_folder, 'data_clinical_patients.txt')
+    # write_patient_minimal_clinical_information(clinical_outputfile, mapfile, center,
+    #                                            merge_patient_clinical_info=merge_patient_clinical_info,
+    #                                            discarded_donors=excluded_donors)
         
-    # write sample clinical information
-    # get clinical sample file from previous import folder if merging
-    merge_sample_clinical_info =  parse_clinical_samples(args.append_data, args.merge_import_folder, 'data_clinical_samples.txt')
-    # get the user defined sample clinical information
-    clinical_info = get_clinical_data(args.clinical) if args.clinical else None
-    clinical_outputfile = os.path.join(cbiodir, 'data_clinical_samples.txt')
-    write_sample_minimal_clinical_information(clinical_outputfile, mapfile, center,
-                                              sample_info = clinical_info,
-                                              merge_sample_clinical_info = merge_sample_clinical_info,
-                                              discarded_samples = excluded_samples)
-    print('wrote clinical information')
+    # # write sample clinical information
+    # # get clinical sample file from previous import folder if merging
+    # merge_sample_clinical_info =  parse_clinical_samples(args.append_data, args.merge_import_folder, 'data_clinical_samples.txt')
+    # # get the user defined sample clinical information
+    # clinical_info = get_clinical_data(args.clinical) if args.clinical else None
+    # clinical_outputfile = os.path.join(cbiodir, 'data_clinical_samples.txt')
+    # write_sample_minimal_clinical_information(clinical_outputfile, mapfile, center,
+    #                                           sample_info = clinical_info,
+    #                                           merge_sample_clinical_info = merge_sample_clinical_info,
+    #                                           discarded_samples = excluded_samples)
+    # print('wrote clinical information')
     
        
-    # write clinical input file for oncokb-annotator
-    clinical_oncokb = os.path.join(suppdir, 'oncokb_clinical_info.txt')
-    merge_clinical_oncokb = parse_clinical_oncokb(args.append_data, args.merge_import_folder, 'oncokb_clinical_info.txt')
-    write_clinical_oncokb(clinical_oncokb, mapfile, cancer_code,
-                          merge_clinical_oncokb=merge_clinical_oncokb,
-                          discarded_samples=excluded_samples)
-    print('wrote oncoKb clinical information') 
-    
-    
-    # link files
-    for i in ['maf', 'seg', 'gep', 'fus']:
-        link_files(outdir, mapfile, i)
-    print('linked files to input directories')
-     
-        
-    # concatenate input files
-    # concatenate mafs    
-    mafs = extract_files_from_map(mapfile, 'maf')
-    mafdir = os.path.join(outdir, 'mafdir')
-    if mafs or merge_maf:
-        assert os.path.isdir(mafdir)
-        mutation_file = os.path.join(mafdir, 'all_mutations.maf.txt')
-        # concatenate all maf files into a plain text file
-        concatenate_maf_files(mafdir, mutation_file, merge_maf)
-        print('concatenated maf files')
-    else:
-        mutation_file = ''
-    
-    # check if seg dir and seg files exist
-    segs = extract_files_from_map(mapfile, 'seg')
-    segdir = os.path.join(outdir, 'segdir')
-    if segs or merge_seg:
-        assert os.path.isdir(segdir)
-        segfile = os.path.join(segdir, 'input.seg.txt')
-        # concatenate seg files if they exist
-        concatenate_seg_files(segdir, segfile, merge_seg)
-        print('concatenated seg files')
-    else:
-        segfile = ''
 
-    # check if fusion dir and fusion files exist
-    fusions = extract_files_from_map(mapfile, 'fus')
-    fusdir = os.path.join(outdir, 'fusdir')
-    if fusions or merge_fus:
-        assert os.path.isdir(fusdir)
-        fusfile = os.path.join(fusdir, 'input.fus.txt')
-        # concatenate fusion files, if they exist
-        concatenate_fusion_files(fusdir, fusfile, merge_fus)
-        print('concatenated fusion files')
-        # check if fusion data
-        if check_fusion_data(fusfile) == False:
-            fusfile = ''
-            print('no fusion data in concatenated fusion file')
-        
-    else:
-        fusfile = ''
+    #### check how to remove samples
+
     
-    # extract and concatenate fpkm from gep files
-    geps = extract_files_from_map(mapfile, 'gep')
-    gepdir = os.path.join(outdir, 'gepdir')
-    if geps or merge_gep:
-        assert os.path.isdir(gepdir)
-        gepfile = os.path.join(gepdir, 'input.fpkm.txt')
-        # write fpkm to file
-        concatenate_fpkm_from_gep_files(gepdir, gepfile, merge_gep)
-        print('concatenated fpkm from gep files')
-    else:
-        gepfile = ''
-    
-    
-    # remove samples from the data files
-    if excluded_samples:
-        if mutation_file:
-            removed_mutations = remove_samples_from_maf(mutation_file, excluded_samples)
-            print('Removed {0} mutations for {1} samples in mutation file {2}'.format(removed_mutations, len(excluded_samples), mutation_file))
-        if segfile:
-            removed_events = remove_samples_from_segfile(segfile, excluded_samples)
-            print('Removed {0} events for {1} samples in seg file {2}'.format(removed_events, len(excluded_samples), segfile))
-        if fusfile:
-            removed_fusions = remove_samples_from_fusion(fusfile, excluded_samples)
-            print('Removed {0} fusions for {1} samples in fusion file {2}'.format(removed_fusions, len(excluded_samples), fusfile))
-        if gepfile:
-            removed_expression = remove_samples_from_gepfile(gepfile, excluded_samples)
-            print('Removed {0} genes for {1} samples in gep file {2}'.format(removed_expression, len(excluded_samples), gepfile))
+    # # remove samples from the data files
+    # if excluded_samples:
+    #     if mutation_file:
+    #         removed_mutations = remove_samples_from_maf(mutation_file, excluded_samples)
+    #         print('Removed {0} mutations for {1} samples in mutation file {2}'.format(removed_mutations, len(excluded_samples), mutation_file))
+    #     if segfile:
+    #         removed_events = remove_samples_from_segfile(segfile, excluded_samples)
+    #         print('Removed {0} events for {1} samples in seg file {2}'.format(removed_events, len(excluded_samples), segfile))
+    #     if fusfile:
+    #         removed_fusions = remove_samples_from_fusion(fusfile, excluded_samples)
+    #         print('Removed {0} fusions for {1} samples in fusion file {2}'.format(removed_fusions, len(excluded_samples), fusfile))
+    #     if gepfile:
+    #         removed_expression = remove_samples_from_gepfile(gepfile, excluded_samples)
+    #         print('Removed {0} genes for {1} samples in gep file {2}'.format(removed_expression, len(excluded_samples), gepfile))
     
            
-    # filter maf files and write metadata
-    # define maffile, output of MafAnnotator
-    if mutation_file:
-        maffile = os.path.join(mafdir, 'input.maf.txt')
-        # filter mutations and indels if option is activated
-        if filter_variants:
-            total, kept = filter_mutations(mutation_file, os.path.join(mafdir, 'filtered.mutations.txt'), depth_filter, alt_freq_filter, gnomAD_AF_filter, keep_variants, os.path.join(mafdir, 'filtered.mutations.removed.txt'))
-            print("before mutations filtering: ", total)
-            print("after mutations filtering: ", kept)
-            print('filtered variants')
-        # filter indels if option is activated
-        if filter_indels:
-            # check if variants are filtered
-            if filter_variants:
-                maf_to_filter = os.path.join(mafdir, 'filtered.mutations.txt')
-                maf_filtered = os.path.join(mafdir, 'filtered.mutations.indels.txt')
-                maf_rem = os.path.join(mafdir, 'filtered.mutations.indels.remove.txt')
-            else:
-                maf_to_filter = os.path.join(mafdir, 'all_mutations.maf.txt')
-                maf_filtered = os.path.join(mafdir, 'filtered.indels.txt')
-                maf_rem = os.path.join(mafdir, 'filtered.indels.remove.txt')
-            # output file for MafAnnotator
-            maf_input_annotation = maf_filtered
-            total, kept = remove_indels(maf_to_filter, maf_filtered, maf_rem)
-            print("before indel filtering: ", total)
-            print("after indel filtering: ", kept)
-            print('filtered indels')
-        else:
-            if filter_variants:
-                maf_input_annotation = os.path.join(mafdir, 'filtered.mutations.txt')    
-            else:
-                print('kept all variants')
-                maf_input_annotation = os.path.join(mafdir, 'all_mutations.maf.txt')
-     
-        # get oncokb token
-        oncokb_token = get_token(token)
-    
-        # annotate mafs with oncokb-annotate        
-        maf_annotation = subprocess.call('MafAnnotator -i {0} -o {1} -c {2} -b {3}'.format(maf_input_annotation, maffile, os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell=True)
-        # check exit code
-        if maf_annotation:
-            sys.exit('Error when running MafAnnotator.')
-        else:
-            print('Annotated variants with MafAnnotator')
-    
-        # generate mutations data
-        print('Processing Mutation data from {0}'.format(maffile))
-        # only do the filtering steps if tglpipe is set to TRUE
-        if tglpipe:
-            print('tglpipe is set to true, filtering data according to tgl specifications')
-            df_cbio_anno = procVEP(maffile)
-            df_cbio_filt = df_cbio_anno[df_cbio_anno['TGL_FILTER_VERDICT'] == 'PASS']
-            # get snvs for dcsigs
-            df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
-            # for cbioportal input
-            df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
-            # unfiltered data
-            df_cbio_anno.to_csv(os.path.join(suppdir, 'unfiltered_data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
-        else:
-            df_cbio_filt = pd.read_csv(maffile, sep="\t", header=0)
-            df_snv = df_cbio_filt[df_cbio_filt['Variant_Type'] == 'SNP']
-            df_cbio_filt.to_csv(os.path.join(cbiodir, 'data_mutations_extended.txt'), sep="\t", index=False, na_rep='NA')
-
-        # write metadata file
-        write_metadata(os.path.join(cbiodir, 'meta_mutations_extended.txt'), project_name, 'maf', genome)
-        print('wrote mutations metadata')
-    
-    # generate CNA data and metadata files if input segmentation file exists
-    if segfile:
-        # generate metadata files
-        # write cna metadata
-        write_metadata(os.path.join(cbiodir, 'meta_CNA.txt'), project_name, 'discrete', genome)    
-        write_metadata(os.path.join(cbiodir, 'meta_log2CNA.txt'), project_name, 'log2-value', genome)    
-        write_metadata(os.path.join(cbiodir, 'meta_segments.txt'), project_name, 'seg', genome) 
-        print('wrote CNA metadata files')
-        if genelist:
-            print('Restricting CNAs to the list of genes provided in {0}'.format(genelist))
-          
-        # function returns list of 3 objects
-        print('Processing CNA data from {0}'.format(segfile))
-        segData, df_cna, df_cna_thresh = preProcCNA(segfile, genebed, gain, amplification, heterozygous_deletion, homozygous_deletion, oncolist, genelist)
-        # write cbio files
-        print('writing seg file')
-        segData.to_csv(os.path.join(cbiodir, 'data_segments.txt'), sep='\t', index=False)
-        df_cna.to_csv(os.path.join(cbiodir, 'data_log2CNA.txt'), sep='\t', index=True)
-        df_cna_thresh.to_csv(os.path.join(cbiodir, 'data_CNA.txt'), sep='\t', index=True)
-        # write the truncated data_CNA file (remove genes which are all zero) for oncoKB annotator
-        df_CNA = df_cna_thresh.loc[~(df_cna_thresh == 0).all(axis=1)]
-        df_CNA.to_csv(os.path.join(suppdir, 'data_CNA_short.txt'), sep='\t', index=True)
-    
-    
-    # generate expression data and metadata file if input file exists
-    if gepfile:
-        # write metadata files
-        write_metadata(os.path.join(cbiodir, 'meta_expression.txt'), project_name, 'expression', genome)
-        write_metadata(os.path.join(cbiodir, 'meta_expression_zscores.txt'), project_name, 'zscore', genome)
-        print('wrote expression metadata files')
-        # write all samples with rna data to file 
-        gep_study_file = os.path.join(outdir, 'gep_study.list')
-        list_gep_samples(gepdir, gep_study_file)
-        # generate expression data files
-        print('Processing RNASEQ data from {0}'.format(gepfile))
-        # get list of samples in study
-        study_samples = readGep(gep_study_file)
-        # preprocess the full data frame
-        df = preProcRNA(gepfile, enscon, genelist)
-        print('getting STUDY-level data')
-        # subset data to STUDY level data for cbioportal
-        df_study = df[study_samples]
-        # write the raw STUDY data
-        df_study.to_csv(os.path.join(cbiodir, "data_expression.txt"), sep="\t", header=True, index=True)
-        # z-scores STUDY
-        df_zscore = compZ(df_study)
-        df_zscore.to_csv(os.path.join(cbiodir, "data_expression_zscores.txt"), sep="\t", header=True, index=True)
-        print('wrote expression data files')        
-    
-    # generate fusion data and metadata if input file exists
-    if fusfile:
-        # write SV metadata
-        write_metadata(os.path.join(cbiodir, 'meta_sv.txt'), project_name, 'sv', genome)
-        print('wrote SV metadata')
-        # process the fusion file
-        fusion_cbio = preProcFus(fusfile, minfusionreads, entcon)
-        # write fusion file
-        data_fusion = os.path.join(cbiodir, "data_fusions.txt")
-        fusion_cbio.to_csv(data_fusion, sep="\t", index=False)
-        print('wrote fusion data files')
-        # convert fusion file to SV format
-        # get the path to sv file
-        data_sv = os.path.join(cbiodir, "data_sv.txt")
-        # convert to sv file
-        convert_fusion_to_sv(data_fusion, data_sv)
-        # move fusion file to supplementary directory
-        if os.path.isfile(data_fusion):
-            new_data_fusion = os.path.join(suppdir, os.path.basename(data_fusion))
-            os.rename(data_fusion, new_data_fusion)     
-                    
-    # annonate CNA files with oncoKb for supplementary interpretation data
-    # check that CNA data file is generated
-    if os.path.isfile(os.path.join(suppdir, 'data_CNA_short.txt')):
-        cna_annotation = subprocess.call('CnaAnnotator -i {0} -o {1} -c {2} -b {3}'.format(os.path.join(suppdir, 'data_CNA_short.txt'), os.path.join(suppdir, 'data_CNA_oncoKB.txt'), os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell = True)  
-        if cna_annotation:
-            sys.exit('Error when running CnaAnnotator.')
-        else:
-            print('Annotated CNAs with CnaAnnotator')
-    else:
-        print('WARNING. File {0} does not exist. Skipping CNA annotation'.format(os.path.join(suppdir, 'data_CNA_short.txt')))
-
-    print('Success! Data in the cbioportal import folder is ready for upload.')
 
 
+    print('Success! {0} import folders have been merged into {1}'.format(len(import_folders), cbiodir))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   
 
 def generate_mapfile(args):
     '''
@@ -4669,28 +5023,24 @@ if __name__ == '__main__':
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
     g_parser.set_defaults(func=make_import_folder)
     
-    
     # merge import folders
     mg_parser = subparsers.add_parser('merge', help="Merge previous import folders")
-    mg_parser.add_argument('-configs', dest='configs', nargs = '*', help="White space separated list of paths to config files", required = True)
-    
-    mg_parser.add_argument('-importFolders', dest='import_folders', nargs = '*', help="White space separated list of paths to impot folders", required = True)
-    
-    mg_parser.add_argument('-o', '--outdir', dest='outdir', help='Path to the output directory', required = True)
-                           
-                           
-    mg_parser.add_argument('-rs', '--RemovedSamples', dest='removed_samples', help='Path to the files with samples to be excluded')
-                           
-    
-    
-    
-    
-    
+    mg_parser.add_argument('-configs', dest='configs', nargs = '*', help="White space separated list of paths to config files")
+    mg_parser.add_argument('-importFolders', dest='import_folders', nargs = '*', help="White space separated list of paths to impot folders")
+    mg_parser.add_argument('-configPaths', dest='config_paths', help="File with paths to the config files of the import folders to merge")
+    mg_parser.add_argument('-importPaths', dest='import_paths', help="File with paths to the import folders to merge")
+    mg_parser.add_argument('-cancerCode', dest='cancer_code', help="Cancer code. See http://oncotree.mskcc.org", required=True)
+    mg_parser.add_argument('-genome', dest='genome', choices = ['hg19', 'hg38'], help="Reference genome", required=True)
+    mg_parser.add_argument('--merge_with_diferences', dest='merge_with_diferences', action='store_true', help='Merges import folders with parameter differences if activated. Excludes genome differences. Default is False')
+    mg_parser.add_argument('-outdir', dest='outdir', help='Path to the output directory', required = True)
+    mg_parser.add_argument('-center', dest='center', help='genomic center', required = True)
+    mg_parser.add_argument('-project', dest='project', help='Name of the project', required = True)
+    mg_parser.add_argument('-description', dest='description', help='Project description', required = True)
+    mg_parser.add_argument('-study', dest='study', help='Format of the study name: Project: Top-level-OncoTree, Concept (PI, Centre) AcronymProject description', required = True)
+    mg_parser.add_argument('-excludeSamples', dest='exclude_samples', nargs= '*',  help='White space sparated list of excluded samples')
+    mg_parser.add_argument('-excludeFile', dest='exclude_file', help='Path to file with samples to exclude')
     mg_parser.set_defaults(func=merge_import_folder)
-    
-    
-    
-    
+        
     # generate maping file
     m_parser = subparsers.add_parser('map', help="Generate map file")
     m_parser.add_argument('-o', '--outdir', dest='outdir', help='Path to the output directory', required = True)
