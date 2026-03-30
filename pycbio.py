@@ -4258,10 +4258,10 @@ def merge_meta_files(cbiodir, import_folders, project_name, study, description, 
     # get the list of files to merge in the import folder 
     cbiofiles = group_files(import_folders, False)
     
-    # keep only the metadata files
-    to_remove = [i for i in cbiofiles if not i.startswith('meta_')]
-    for i in to_remove:
-        del cbiofiles[i]
+    # # keep only the metadata files
+    # to_remove = [i for i in cbiofiles if not i.startswith('meta_')]
+    # for i in to_remove:
+    #     del cbiofiles[i]
     
     if 'meta_study.txt' in cbiofiles:
         write_meta_study(os.path.join(cbiodir, 'meta_study.txt'), study, project_name, description, genome, cancer_code)
@@ -4299,7 +4299,8 @@ def remove_merged_metafiles(cbiodir):
     '''    
     
     # make a list of metada files in cbiodir
-    metafiles = [os.path.join(cbiodir, i) for i in os.listdir(cbiodir) if 'meta_' in i]
+    # exclude meta_study.txt
+    metafiles = [os.path.join(cbiodir, i) for i in os.listdir(cbiodir) if 'meta_' in i and 'study' not in i]
     
     if metafiles:
         for i in metafiles:
@@ -4340,10 +4341,10 @@ def get_multiline_header(infile):
     header = []
     for line in infile:
         if line.startswith('#'):
-            header.append(line.rstrip())
+            header.append(line)
         else:
             break
-    header.append(line.rstrip())
+    header.append(line)
      
     return header
     
@@ -4552,7 +4553,7 @@ def merge_clinical_files(cbiodir, cbiofiles, excluded_samples):
                 infile.close()
                           
             newfile = open(os.path.join(cbiodir, i), 'w')
-            newfile.write('\n'.join(header))
+            newfile.write(''.join(header))
             newfile.write(''.join(data))
             newfile.close()
 
