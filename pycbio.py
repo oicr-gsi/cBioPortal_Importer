@@ -4019,7 +4019,7 @@ def collect_config_parameters(config_files):
         hetdel.append(heterozygous_deletion)
         homdel.append(homozygous_deletion)
         fusreads.append(minfusionreads)
-        dfilters.sppend(depth_filter)
+        dfilters.append(depth_filter)
         altfilters.append(alt_freq_filter)
         gnomADfilters.append(gnomAD_AF_filter)
         tglfilters.append(tglpipe)
