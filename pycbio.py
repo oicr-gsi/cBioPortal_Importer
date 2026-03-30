@@ -4113,7 +4113,7 @@ def check_metadata(D, metadata, metadata_type):
     ----------
     - D (dict): Dictionary with parameters extracted from the config files of the import folders to be merged
     - metadata (str): Cancer code, project, study name or description 
-    - metadata_type (str): The type of metadata to check (cancer_code, project_name, project_name)
+    - metadata_type (str): The type of metadata to check (cancer_code, project_name, study, description)
     '''
     
     name = ' '.join(metadata_type.split('_'))
@@ -4422,9 +4422,9 @@ def merge_expression_CNA_files(cbiodir, cbiofiles, excluded_samples):
                         gene = line[0]
                         if gene not in D:
                             D[gene] = {}
-                        for i in range(1, len(line)):
-                            sample = header[i]
-                            expression = line[i]
+                        for j in range(1, len(line)):
+                            sample = header[j]
+                            expression = line[j]
                             if sample not in excluded_samples:
                                 D[gene][sample] = expression
                 infile.close()            
@@ -4433,7 +4433,7 @@ def merge_expression_CNA_files(cbiodir, cbiofiles, excluded_samples):
                 h = ['Hugo_Symbol']
                 samples = []
                 for gene in D:
-                    samples.extend(list(D[gene].keys))
+                    samples.extend(list(D[gene].keys()))
                     samples = list(set(samples))
                 samples.sort()
                 h.extend(samples)
@@ -4488,11 +4488,8 @@ def merge_data_files(cbiodir, cbiofiles, excluded_samples):
                     
             newfile = open(os.path.join(cbiodir, i), 'w')
             newfile.write('\t'.join(header))
-            newfile.write(data)
+            newfile.write(''.join(data))
             newfile.close()
-        
-        
-        
         
         
         
@@ -4556,7 +4553,7 @@ def merge_clinical_files(cbiodir, cbiofiles, excluded_samples):
                           
             newfile = open(os.path.join(cbiodir, i), 'w')
             newfile.write('\n'.join(header))
-            newfile.write(data)
+            newfile.write(''.join(data))
             newfile.close()
 
 
@@ -4876,14 +4873,15 @@ def merge_import_folder(args):
     # collect parameters
     config_params = collect_config_parameters(config_files)
     # check the parameters in the configs
-    same_parameters, differences = check_config_parameters(config_files)
+    same_parameters, differences = check_config_parameters(config_params)
+    print('collected config parameters')
 
     # check genome
     check_genome(config_params, args.genome)
     print('checked genome')
     # check resources
     check_metadata(config_params, args.cancer_code, 'cancer_code')
-    check_metadata(config_params, args.project, 'project')
+    check_metadata(config_params, args.project, 'project_name')
     check_metadata(config_params, args.study, 'study')
     check_metadata(config_params, args.description, 'description')
     print('checked metadata')
