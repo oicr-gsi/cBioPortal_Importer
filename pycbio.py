@@ -4166,9 +4166,9 @@ def group_files(import_folders, case_list = False):
 
 
 
-def merge_case_files(case_dir, import_folders, project_name):
+def merge_case_files(case_dir, import_folders, project_name, excluded_samples):
     '''
-    (str, list, str)
+    (str, list, str, list, list)
     
     Extract samples from each case file in case_lists directory of the import folders
     and write a new case file in the case_dir merging all samples from previous import folders
@@ -4178,6 +4178,7 @@ def merge_case_files(case_dir, import_folders, project_name):
     - case_dir (str): Path to the case_lists directory where the merged case file is written
     - import_folders (list): List of paths to import folders to merge
     - project_name (str): Name of the project
+    - excluded_samples (list): List of samples to remove 
     '''
     
     # get the list of files to merge in the case_lists folder
@@ -4215,6 +4216,13 @@ def merge_case_files(case_dir, import_folders, project_name):
             description = 'This is this case list that contains all samples that are profiled for structural variants.'
             stable_id = '{0}_sv'.format(project_name)
    
+    
+        # remove samples to exclude
+        if excluded_samples:
+            for i in excluded_samples:
+                if i in samples:
+                    samples.remove(i)
+          
         if samples:
             # write outputfile if samples exist
             outputfile = os.path.join(case_dir, filename)
@@ -4226,14 +4234,6 @@ def merge_case_files(case_dir, import_folders, project_name):
                  'case_list_ids: {0}'.format('\t'.join(samples))]
             newfile.write('\n'.join(L))
             newfile.close()
-
-
-
-
-
-
-
-
 
 
 
@@ -4286,9 +4286,31 @@ def merge_meta_files(cbiodir, import_folders, project_name, study, description, 
     
     
     
+def remove_merged_metafiles(cbiodir):
+    '''
+    (str) -> None
+
+    Remove merged metadata files if corresponding data files do not exist
+    because samples have been excluded
     
+    Parameters
+    ----------
+    - cbiodir (str): Path to the cbioportal_import_data folder 
+    '''    
     
+    # make a list of metada files in cbiodir
+    metafiles = [os.path.join(cbiodir, i) for i in os.listdir(cbiodir) if 'meta_' in i]
     
+    if metafiles:
+        for i in metafiles:
+            filename = os.path.basename(i)
+            datafilename = filename.replace('meta', 'data')
+            datafile = os.path.join(cbiodir, datafilename)
+            if os.path.isfile(datafile) == False:
+                os.remove(i)
+                print('Removed metadafile {0} because {1} does not exist'.format(filename, datafilename)) 
+        
+        
     
 def get_simple_header(infile):
     '''
@@ -4372,9 +4394,9 @@ def check_file_headers(cbiofiles):
         sys.exit('WARNING: Some data files have different headers and cannopt be merged: {0}'.format(';'.join(different_headers)))    
     
     
-def merge_expression_CNA_files(cbiodir, cbiofiles):
+def merge_expression_CNA_files(cbiodir, cbiofiles, excluded_samples):
     '''
-    (str, dict) -> None
+    (str, dict, list) -> None
     
     Merge expression and CNA data files into the cbiodir directory
         
@@ -4383,10 +4405,11 @@ def merge_expression_CNA_files(cbiodir, cbiofiles):
     - cbiodir (str): Path to the cbioportal_import_data folder 
     - cbiofiles (dict): Dictionary with list of file paths for each expected
                         file found in the import folders to merge
+    - excluded_samples (list): List of samples to remove
     '''
     
     for i in cbiofiles:
-        if i in ['data_expressions.txt', 'data_expression_zscores.txt',
+        if i in ['data_expression.txt', 'data_expression_zscores.txt',
                  'data_log2CNA.txt', 'data_CNA.txt']:
             D = {}
             for file in cbiofiles[i]:
@@ -4402,7 +4425,8 @@ def merge_expression_CNA_files(cbiodir, cbiofiles):
                         for i in range(1, len(line)):
                             sample = header[i]
                             expression = line[i]
-                            D[gene][sample] = expression
+                            if sample not in excluded_samples:
+                                D[gene][sample] = expression
                 infile.close()            
                 
             if D:
@@ -4426,17 +4450,18 @@ def merge_expression_CNA_files(cbiodir, cbiofiles):
         
     
 
-def merge_data_files(cbiodir, cbiofiles):
+def merge_data_files(cbiodir, cbiofiles, excluded_samples):
     '''
-    (str, dict) -> None
+    (str, dict, list) -> None
     
-    Merge data files into the cbiodir directory
+    Merge data files into the cbiodir directory and exclude samples if needed
         
     Parameters
     ----------
     - cbiodir (str): Path to the cbioportal_import_data folder 
     - cbiofiles (dict): Dictionary with list of file paths for each expected
                         file found in the import folders to merge
+    - excluded_samples (list): List of samples to remove
     '''
 
     for i in cbiofiles:
@@ -4444,21 +4469,55 @@ def merge_data_files(cbiodir, cbiofiles):
             data = []
             for file in cbiofiles[i]:
                 infile = open(file)
-                header = infile.readline().rstrip()
-                content = infile.read().rstrip().split('\n')
-                infile.close()
-                data.extend(content)
-        
+                header = infile.readline().split('\t')
+                for line in infile:
+                    if excluded_samples:
+                        if line.strip():
+                            line = line.split('\t')
+                            if i  == 'data_mutations_extended.txt':
+                                tumor_sample = line[header.index('Tumor_Sample_Barcode')]
+                                matched_normal = line[header.index('Matched_Norm_Sample_Barcode')]
+                                if tumor_sample not in excluded_samples and matched_normal not in excluded_samples:
+                                    data.append('\t'.join(line))
+                            elif i in ['data_segments.txt', 'data_sv.txt']:
+                                sample = line[0]
+                                if sample not in excluded_samples:
+                                    data.append('\t'.join(line))
+                    else:
+                        data.append(line)
+                    
             newfile = open(os.path.join(cbiodir, i), 'w')
-            newfile.write(header + '\n')
-            newfile.write('\n'.join(data))
+            newfile.write('\t'.join(header))
+            newfile.write(data)
             newfile.close()
         
-
-
-def merge_clinical_files(cbiodir, cbiofiles):
+        
+        
+        
+        
+        
+def convert_samples_to_donors(samples):
     '''
-    (str, dict) -> None
+    (list) -> list
+    
+    Returns a list of donor Ids  corresponding to the list of samples
+    
+    Parameters
+    ----------
+    samples (list): List of sample Ids
+    '''        
+        
+    donors = ['_'.join(i.split('_')[:2]) for i in samples]
+    donors = list(set(donors))
+    
+    return donors
+    
+        
+
+
+def merge_clinical_files(cbiodir, cbiofiles, excluded_samples):
+    '''
+    (str, dict, list) -> None
     
     Merge clinical data files into the cbiodir directory
         
@@ -4467,7 +4526,12 @@ def merge_clinical_files(cbiodir, cbiofiles):
     - cbiodir (str): Path to the cbioportal_import_data folder 
     - cbiofiles (dict): Dictionary with list of file paths for each expected
                         file found in the import folders to merge
+    - excluded_samples (list): List of samples to remove
     '''
+
+    if excluded_samples:
+        # get the donor ids
+        donors = convert_samples_to_donors(excluded_samples)
 
     for i in cbiofiles:
         if i in ['data_clinical_patients.txt', 'data_clinical_samples.txt']:
@@ -4477,15 +4541,22 @@ def merge_clinical_files(cbiodir, cbiofiles):
                 # collect multi line header
                 header = get_multiline_header(infile)
                 # keep trailing white space in lines (multiple tabs)
-                content = infile.read().split('\n')
+                for line in infile:
+                    if excluded_samples:
+                        line = line.split('\t')
+                        # skip records if samples or donors are xcluded
+                        if (line[0] in donors or line[0] in excluded_samples) \
+                            or (line[1] in donors or line[1] in excluded_samples):
+                                continue
+                        else:
+                            data.append('\t'.join(line))
+                    else:
+                        data.append(line)
                 infile.close()
-                while '' in content:
-                    content.remove('')
-                data.extend(content)
-                
+                          
             newfile = open(os.path.join(cbiodir, i), 'w')
             newfile.write('\n'.join(header))
-            newfile.write('\n'.join(data))
+            newfile.write(data)
             newfile.close()
 
 
@@ -4860,7 +4931,8 @@ def merge_import_folder(args):
         check_file_headers(cbiofiles) 
         
         # write the case files in the cbioportal_import_data/case_lists folder
-        merge_case_files(casedir, import_folders, args.project)
+        # remove samples from the case files if samples in excluded samples
+        merge_case_files(casedir, import_folders, args.project, excluded_samples)
         print('Wrote case files')
         
         # write the metadata files in the cbioportal_import_data folder
@@ -4868,73 +4940,30 @@ def merge_import_folder(args):
         print('Wrote metadata files')
 
         # merge mutation, sv and segment data files
-        merge_data_files(cbiodir, cbiofiles)
+        # remove samples from the data files if samples in excluded samples
+        merge_data_files(cbiodir, cbiofiles, excluded_samples)
         print('Merged mutation and SV data files')
-                
+        
         # merge clinical data files
-        merge_clinical_files(cbiodir, cbiofiles)
+        # remove samples from the clinical files if samples in excluded samples
+        merge_clinical_files(cbiodir, cbiofiles, excluded_samples)
         print('Merged clinical data files')
         
         # merge expression and CNA data files
-        merge_expression_CNA_files(cbiodir, cbiofiles)
+        # remove samples from the expression and CNA files if samples in excluded samples
+        merge_expression_CNA_files(cbiodir, cbiofiles, excluded_samples)
         print('Merged expression and CNA data files')
 
-           
-
-
-        # THINGS TO DO
-        # - remove excluded samples from the data files
-        # remove metadata files if data files do not excist because sampes have been excluded
-        # allow clinical merging of clinical files with different headers
-        # clinical_samples and clinical_patients may have custom fields: 
-        # enable merging of clinical files with different hears and fields
-        # do not include clinical data files when checking for header
-
-
-
-    
-    ### check if merging of different clinical tables is allowed
-    
-    # clinical_outputfile = os.path.join(cbiodir, 'data_clinical_patients.txt')
-    # # get clinical file from previous import folder if merging
-    # merge_patient_clinical_info = parse_clinical_patients(args.append_data, args.merge_import_folder, 'data_clinical_patients.txt')
-    # write_patient_minimal_clinical_information(clinical_outputfile, mapfile, center,
-    #                                            merge_patient_clinical_info=merge_patient_clinical_info,
-    #                                            discarded_donors=excluded_donors)
         
-    # # write sample clinical information
-    # # get clinical sample file from previous import folder if merging
-    # merge_sample_clinical_info =  parse_clinical_samples(args.append_data, args.merge_import_folder, 'data_clinical_samples.txt')
-    # # get the user defined sample clinical information
-    # clinical_info = get_clinical_data(args.clinical) if args.clinical else None
-    # clinical_outputfile = os.path.join(cbiodir, 'data_clinical_samples.txt')
-    # write_sample_minimal_clinical_information(clinical_outputfile, mapfile, center,
-    #                                           sample_info = clinical_info,
-    #                                           merge_sample_clinical_info = merge_sample_clinical_info,
-    #                                           discarded_samples = excluded_samples)
-    # print('wrote clinical information')
-    
-       
-
-    #### check how to remove samples
-
-    
-    # # remove samples from the data files
-    # if excluded_samples:
-    #     if mutation_file:
-    #         removed_mutations = remove_samples_from_maf(mutation_file, excluded_samples)
-    #         print('Removed {0} mutations for {1} samples in mutation file {2}'.format(removed_mutations, len(excluded_samples), mutation_file))
-    #     if segfile:
-    #         removed_events = remove_samples_from_segfile(segfile, excluded_samples)
-    #         print('Removed {0} events for {1} samples in seg file {2}'.format(removed_events, len(excluded_samples), segfile))
-    #     if fusfile:
-    #         removed_fusions = remove_samples_from_fusion(fusfile, excluded_samples)
-    #         print('Removed {0} fusions for {1} samples in fusion file {2}'.format(removed_fusions, len(excluded_samples), fusfile))
-    #     if gepfile:
-    #         removed_expression = remove_samples_from_gepfile(gepfile, excluded_samples)
-    #         print('Removed {0} genes for {1} samples in gep file {2}'.format(removed_expression, len(excluded_samples), gepfile))
-    
-           
+        # remove case files if datafiles are not present because samples were excluded
+        remove_merged_metafiles(cbiodir)
+        
+            
+        # THINGS TO DO
+        # allow clinical merging of clinical files with different headers:
+            # clinical_samples and clinical_patients may have custom fields: 
+            # enable merging of clinical files with different hears and fields
+            # do not include clinical data files when checking for header
 
 
     print('Success! {0} import folders have been merged into {1}'.format(len(import_folders), cbiodir))
