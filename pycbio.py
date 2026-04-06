@@ -4838,7 +4838,7 @@ def merge_import_folder(args):
     - import_paths (str): File with paths to the import folders to merge
     - cancer_code (str): Cancer code. See http://oncotree.mskcc.org
     - genome (str): Reference genome. hg19 or hg38
-    - merge_with_diferences (bool): Merges import folders with parameter differences if True. Default is False
+    - merge_with_differences (bool): Merges import folders with parameter differences if True. Default is False
     - outdir (str): Path to the output directory
     - center (str): Genomic center
     - project (str): Name of the project
@@ -5059,7 +5059,7 @@ if __name__ == '__main__':
     mg_parser.add_argument('-importPaths', dest='import_paths', help="File with paths to the import folders to merge")
     mg_parser.add_argument('-cancerCode', dest='cancer_code', help="Cancer code. See http://oncotree.mskcc.org", required=True)
     mg_parser.add_argument('-genome', dest='genome', choices = ['hg19', 'hg38'], help="Reference genome", required=True)
-    mg_parser.add_argument('--merge_with_diferences', dest='merge_with_diferences', action='store_true', help='Merges import folders with parameter differences if activated. Excludes genome differences. Default is False')
+    mg_parser.add_argument('--merge_with_differences', dest='merge_with_differences', action='store_true', help='Merges import folders with parameter differences if activated. Excludes genome differences. Default is False')
     mg_parser.add_argument('-outdir', dest='outdir', help='Path to the output directory', required = True)
     mg_parser.add_argument('-center', dest='center', help='genomic center', required = True)
     mg_parser.add_argument('-project', dest='project', help='Name of the project', required = True)
