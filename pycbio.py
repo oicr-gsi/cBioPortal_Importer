@@ -2256,43 +2256,45 @@ def list_gep_samples(gepdir, outputfile):
     
 
 
-def extract_fpkm(gepfile):
+def extract_expression(gepfile, count):
     '''
-    (str) -> dict
+    (str, str) -> dict
     
-    Returns a dictionary of gene, fpkm key, value pairs
+    Returns a dictionary of gene, fpkm or tpm key, value pairs
     
     Parameters
     ----------
-    - gepfile (str): Path to the rsem file with fkpm counts
+    - gepfile (str): Path to the rsem file with fkpm and tpm counts
+    - count (str): fpkm or tpm
     '''
     
     # create a dict to store fpkm for each gene
     D = {}
     infile = open(gepfile)
-    # skip header
-    infile.readline()
+    header = list(map(lambda x: x.lower(), infile.readline().split('\t')))
     for line in infile:
         line = line.rstrip()
         if line != '':
             line = line.split('\t')
             gene = line[0]
-            fpkm = line[6]
+            expression = line[header.index(count)]
             assert gene not in D
-            D[gene] = fpkm
+            D[gene] = expression
     infile.close()
     return D
-    
+ 
+   
 
-def collect_fpkm(gepdir):
+def collect_expression(gepdir, count):
     '''
-    (str) -> dict
+    (str, str) -> dict
     
-    Returns a dictionary with fpkm values for all genes and samples with rna data in directory gepdir
+    Returns a dictionary with fpkm or tpm values for all genes and samples with rna data in directory gepdir
     
     Parameters
     ----------
     - gepdir (str): Directory with rsem files
+    - count (str): fpkm or tpm
     '''
     
     # make a list of rsem files
@@ -2302,10 +2304,10 @@ def collect_fpkm(gepdir):
     for file in gepfiles:
         # get sample name from file name
         sample = get_sample_from_filename(file)
-        # get the fkpm for each gene
-        fpkm = extract_fpkm(file)
+        # get the fkpm or tpm for each gene
+        expression = extract_expression(file, count)
         assert sample not in D
-        D[sample] = fpkm
+        D[sample] = expression
     return D
 
 
@@ -2341,15 +2343,15 @@ def parse_merge_gep(merge_gep):
     
     
 
-def write_fpkm_to_file(D, outputfile):
+def write_expression_to_file(D, outputfile):
     '''
     (dict, str) -> None
     
-    Write the fpkm values for all samples and genes in dictionary D to outputfile
+    Write the fpkm or tpm values for all samples and genes in dictionary D to outputfile
     
     Parameters
     ----------
-    - D (dict): Dictionary with fpkm for all samples and gene {sample: {gene: fpkm}}
+    - D (dict): Dictionary with fpkm for all samples and gene {sample: {gene: fpkm or tpm}}
     - outputfile (str): Path to the outputfile
     '''
     
@@ -2361,7 +2363,7 @@ def write_fpkm_to_file(D, outputfile):
         genes.extend(list(D[i].keys()))
         genes = list(set(genes))
         
-    # write fpkm to file
+    # write fpkm or tpm to file
     newfile = open(outputfile, 'w')    
     header = ['gene_id'] + samples
     newfile.write('\t'.join(header) + '\n')    
@@ -2401,22 +2403,24 @@ def write_fpkm_to_file(D, outputfile):
 
 
    
-def concatenate_fpkm_from_gep_files(gepdir, outputfile):
+def concatenate_expression_from_gep_files(gepdir, count, outputfile):
     '''
-    (str, str) -> None
+    (str, str, str) -> None
     
-    Write fpkm for all genes and samples with rna data to outputfile
+    Write fpkm or tpm for all genes and samples with rna data to outputfile
     
     Parameters
     ----------
     - gepdir (str): Directory with rsem files
-    - outputfile (str): Path to the outputfile with fpkm for each sample and gene
+    - count (str): fpkm or tpm
+    - outputfile (str): Path to the outputfile with fpkm or tpm for each sample and gene
     '''
     
     # collect all fpkm for each gene and sample 
-    fpkm = collect_fpkm(gepdir) if gepdir else {}
+    expression = collect_expression(gepdir, count) if gepdir else {}
     # write fpkm to outputfile
-    write_fpkm_to_file(fpkm, outputfile)
+    write_expression_to_file(expression, outputfile)
+
 
 
 
@@ -3127,8 +3131,10 @@ def extract_options_from_config(config):
     L = [config['Options'][i] for i in options]
     # add boolean filter
     L.append(config['Options'].getboolean('keep_variants'))
-    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = L
-    return mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants
+    # append count option
+    L.append(config['Options']['count'])
+    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants, count = L
+    return mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants, count
 
 
 def extract_parameters_from_config(config):
@@ -3873,7 +3879,7 @@ def copy_resource(file, destination_dir):
     
 
 
-def concatenate_input_files(mapfile, outdir, datatype, file_name):
+def concatenate_input_files(mapfile, outdir, datatype, file_name, count = None):
     '''
     (str, str, str, str) -> str
     
@@ -3888,6 +3894,7 @@ def concatenate_input_files(mapfile, outdir, datatype, file_name):
     - datatype (str): Type of the data being processed
                       Accepted values are: maf, seg, gep and fus     
     - file_name (str): Name of the concatenated filewith all input data
+    - count (str | None): fpkm or tpm or None
     '''
     
     # extract data files from map file
@@ -3910,10 +3917,11 @@ def concatenate_input_files(mapfile, outdir, datatype, file_name):
                 concatenated_file = ''
                 print('no fusion data in concatenated fusion file')    
         elif datatype == 'gep':
-            concatenate_fpkm_from_gep_files(datadir, concatenated_file)
+            concatenate_expression_from_gep_files(datadir, count, concatenated_file)
+        
         # print message when done
         if datatype == 'gep':
-            print('concatenated fpkm from gep files')    
+            print('concatenated {0} from gep files'.format(count))    
         else:
             print('concatenated {0} files'.format(datatype))
     else:
@@ -4005,7 +4013,7 @@ def collect_config_parameters(config_files):
         config.read(file)
         # check config
         check_configuration(config)
-        mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
+        mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants, count = extract_options_from_config(config)
         gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
         depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
         
@@ -4587,7 +4595,7 @@ def make_import_folder(args):
     
     # extract variables from config
     token, enscon_hg38, enscon_hg19, entcon, genebed_hg38, genebed_hg19, genelist, oncolist = extract_resources_from_config(config)
-    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants = extract_options_from_config(config)
+    mapfile, outdir, project_name, description, study, center, cancer_code, genome, keep_variants, count = extract_options_from_config(config)
     gain, amplification, heterozygous_deletion, homozygous_deletion, minfusionreads = extract_parameters_from_config(config)
     depth_filter, alt_freq_filter, gnomAD_AF_filter, tglpipe, filter_variants, filter_indels = extract_filters_from_config(config)
     print('extracted variables from config')
@@ -4670,7 +4678,8 @@ def make_import_folder(args):
     # concatenate mavis fusion files into outdir/fusdir/input.fus.txt
     fusfile = concatenate_input_files(mapfile, outdir, 'fus', 'input.fus.txt')
     # extract and concatenate fpkm from gep files
-    gepfile = concatenate_input_files(mapfile, outdir, 'gep', 'input.fpkm.txt')
+    assert count in ['fpkm', 'tpm']
+    gepfile = concatenate_input_files(mapfile, outdir, 'gep', 'input.{0}.txt'.format(count), count=count)
     
        
     # filter maf files and write metadata
@@ -4825,6 +4834,26 @@ def make_import_folder(args):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def merge_import_folder(args):
     '''
     (list) -> None
@@ -4967,7 +4996,36 @@ def merge_import_folder(args):
 
     print('Success! {0} import folders have been merged into {1}'.format(len(import_folders), cbiodir))
 
-   
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
 
 def generate_mapfile(args):
     '''
