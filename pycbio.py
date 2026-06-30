@@ -3660,14 +3660,17 @@ def make_import_folder(args):
                     
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
-    if os.path.isfile(os.path.join(suppdir, 'data_CNA_short.txt')):
-        cna_annotation = subprocess.call('CnaAnnotator -i {0} -o {1} -c {2} -b {3}'.format(os.path.join(suppdir, 'data_CNA_short.txt'), os.path.join(suppdir, 'data_CNA_oncoKB.txt'), os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell = True)  
-        if cna_annotation:
-            sys.exit('Error when running CnaAnnotator.')
+    if args.annotate_cna:
+        if os.path.isfile(os.path.join(suppdir, 'data_CNA_short.txt')):
+            cna_annotation = subprocess.call('CnaAnnotator -i {0} -o {1} -c {2} -b {3}'.format(os.path.join(suppdir, 'data_CNA_short.txt'), os.path.join(suppdir, 'data_CNA_oncoKB.txt'), os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell = True)  
+            if cna_annotation:
+                sys.exit('Error when running CnaAnnotator.')
+            else:
+                print('Annotated CNAs with CnaAnnotator')
         else:
-            print('Annotated CNAs with CnaAnnotator')
+            print('WARNING. File {0} does not exist. Skipping CNA annotation'.format(os.path.join(suppdir, 'data_CNA_short.txt')))
     else:
-        print('WARNING. File {0} does not exist. Skipping CNA annotation'.format(os.path.join(suppdir, 'data_CNA_short.txt')))
+        print('Skipping optional CNA annotation of supplementary data')
 
     print('Success! Data in the cbioportal import folder is ready for upload.')
 
@@ -3901,6 +3904,7 @@ if __name__ == '__main__':
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
     g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
+    g_parser.add_argument('--annotate_cna', dest='annotate_cna', action='store_true', help='Annotate supplementary CNA data if True')
     g_parser.set_defaults(func=make_import_folder)
     
     # merge import folders
