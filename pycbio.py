@@ -20,16 +20,16 @@ import zipfile
 import pandas as pd 
 import gc 
 import warnings
-# from rpy2 import robjects 
-# from rpy2.robjects import pandas2ri
-# from rpy2.robjects.packages import importr
-# from rpy2.robjects.conversion import localconverter
-# from scipy.stats import zscore
+from rpy2 import robjects 
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.packages import importr
+from rpy2.robjects.conversion import localconverter
+from scipy.stats import zscore
 
-# pd.DataFrame.iteritems = pd.DataFrame.items
+pd.DataFrame.iteritems = pd.DataFrame.items
 
 
-# cntools = importr('CNTools')
+cntools = importr('CNTools')
 
 
 
