@@ -20,15 +20,16 @@ import zipfile
 import pandas as pd 
 import gc 
 import warnings
-from rpy2 import robjects 
-from rpy2.robjects import pandas2ri
-from rpy2.robjects.packages import importr
-from rpy2.robjects.conversion import localconverter
-from scipy.stats import zscore
+# from rpy2 import robjects 
+# from rpy2.robjects import pandas2ri
+# from rpy2.robjects.packages import importr
+# from rpy2.robjects.conversion import localconverter
+# from scipy.stats import zscore
+
+# pd.DataFrame.iteritems = pd.DataFrame.items
 
 
-
-cntools = importr('CNTools')
+# cntools = importr('CNTools')
 
 
 
@@ -283,6 +284,125 @@ def preProcFus(datafile, readfilt, entrfile):
     df_cbio = df_cbio.dropna()
 
     return df_cbio
+
+
+
+def preProc_hmf_fusion(fusfile):
+    '''
+    (str) -> dict
+    
+    Returns a dictionary with fusion events for each sample from the concatenated hmf fusion file
+    
+    Parameters
+    ----------
+    - fusfile (str): Path to the concatenated file with hmf fusions
+    '''
+    
+    D = {}
+    
+    infile = open(fusfile)
+    header = infile.readline().rstrip().split('\t')
+    
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            sample = line[header.index('Sample_Id')]
+            event = line[header.index('Event_Info')]
+            gene1 = line[header.index('Site1_Hugo_Symbol')]
+            geneid1 = line[header.index('Site1_Entrez_Gene_Id')]
+            gene2 = line[header.index('Site2_Hugo_Symbol')]            
+            geneid2 = line[header.index('Site2_Entrez_Gene_Id')]        
+            sv_status = line[header.index('SV_Status')]
+            center = line[header.index('Center')]      
+            dna = line[header.index('DNA_support')]
+            rna = line[header.index('RNA_support')]
+            method = line[header.index('Method')]
+            effect =  line[header.index('Site2_Effect_On_Frame')]
+            fusion_status =  line[header.index('Fusion_Status')]
+
+            if sample not in D:
+                D[sample] = {}
+            if event not in D[sample]:
+                D[sample][event] = {'Sample_Id': sample, 
+                                    'Event_Info': event,
+                                    'Site1_Hugo_Symbol': gene1,
+                                    'Site1_Entrez_Gene_Id': geneid1,
+                                    'Site2_Hugo_Symbol': gene2,
+                                    'Site2_Entrez_Gene_Id': geneid2,
+                                    'SV_Status': sv_status,
+                                    'Center': center,
+                                    'DNA_support': [dna],
+                                    'RNA_support': [rna],
+                                    'Method': [method],
+                                    'Site2_Effect_On_Frame': [effect],
+                                    'Fusion_Status': fusion_status}
+            else:
+                D[sample][event]['DNA_support'].append(dna)
+                D[sample][event]['RNA_support'].append(rna)
+                D[sample][event]['Method'].append(method)
+                D[sample][event]['Site2_Effect_On_Frame'].append(effect)
+                assert D[sample][event]['Site1_Hugo_Symbol'] == gene1
+                assert D[sample][event]['Site2_Hugo_Symbol'] == gene2
+         
+    # collapse records
+    for sample in D:
+        for event in D[sample]:
+            D[sample][event]['DNA_support'] = list(set(D[sample][event]['DNA_support']))
+            D[sample][event]['RNA_support'] = list(set(D[sample][event]['RNA_support']))
+            # consider support if at least one fusion event has RNA or DNA support 
+            if 'yes' in D[sample][event]['DNA_support']:
+                D[sample][event]['DNA_support'] = 'yes'
+            else:
+                D[sample][event]['DNA_support'] = 'no'
+            if 'yes' in D[sample][event]['RNA_support']:
+                D[sample][event]['RNA_support'] = 'yes'
+            else:
+                D[sample][event]['RNA_support'] = 'no'
+            D[sample][event]['Method'] = ','.join(sorted(list(set(D[sample][event]['Method']))))
+            D[sample][event]['Site2_Effect_On_Frame'] = ','.join(sorted(list(set(D[sample][event]['Site2_Effect_On_Frame']))))
+                                                   
+    return D                
+                
+                
+
+def write_sv_file(data_fusion, outputfile):
+    '''
+    (dict, str) -> None
+    
+    Write fusion data from hmf to file
+    
+    Paramaters
+    ----------
+    - data_fusion (dict): Dictionary with fusion events for each sample
+    - outputfile (str): Path to the output file
+    '''
+    
+    fusion_header = ['Sample_Id', 'Site1_Hugo_Symbol', 'Site1_Entrez_Gene_Id',
+                     'Site2_Hugo_Symbol', 'Site2_Entrez_Gene_Id', 
+                     'SV_Status', 'Center', 'Event_Info', 'DNA_support',
+                     'RNA_support', 'Method', 'Site2_Effect_On_Frame',
+                     'Fusion_Status']
+    
+    newfile = open(outputfile, 'w')
+    newfile.write('\t'.join(fusion_header) + '\n')
+    
+    for sample in data_fusion:
+        for event in data_fusion[sample]:
+            L = [data_fusion[sample][event]['Sample_Id'],
+                 data_fusion[sample][event]['Event_Info'],
+                 data_fusion[sample][event]['Site1_Hugo_Symbol'],
+                 data_fusion[sample][event]['Site1_Entrez_Gene_Id'],
+                 data_fusion[sample][event]['Site2_Hugo_Symbol'],
+                 data_fusion[sample][event]['Site2_Entrez_Gene_Id'],
+                 data_fusion[sample][event]['SV_Status'],
+                 data_fusion[sample][event]['Center'],
+                 data_fusion[sample][event]['DNA_support'],
+                 data_fusion[sample][event]['RNA_support'],
+                 data_fusion[sample][event]['Method'],
+                 data_fusion[sample][event]['Site2_Effect_On_Frame'],
+                 data_fusion[sample][event]['Fusion_Status']]
+            newfile.write('\t'.join(L) + '\n')
 
 
 
@@ -730,7 +850,8 @@ def write_cases(outputfile, project_name, mapfile, data_type):
         stable_id = '{0}_sequenced'.format(project_name)
     elif data_type == 'sv':
         # make a list of samples for which SV files are available
-        samples = [i.split(',')[1] for i in content if i.split(',')[5].upper() != 'NA']
+        samples = [i.split(',')[1] for i in content if (len(i) == 6 and i.split(',')[5].upper() != 'NA') or 
+                   (len(i) == 7 and (i.split(',')[5].upper() != 'NA' or i.split(',')[6].upper() != 'NA'))]
         name = 'Samples profiled for structural variants'
         description = 'This is this case list that contains all samples that are profiled for structural variants.'
         stable_id = '{0}_sv'.format(project_name)
@@ -1314,7 +1435,7 @@ def concatenate_fusion_files(data, outputfile):
     - outputfile (str): Path to the concatenated seg file
     '''
 
-    # make a list of maf files
+    # make a list of fusion files
     fusionfiles = []
     # make a parallel list of samples
     samples = []
@@ -1371,11 +1492,11 @@ def concatenate_fusion_files(data, outputfile):
             datafile = extract_fusion(file)
             for d in datafile:
                 newline = []
-                for i in range(len(header)):
-                    if header[i] == 'Sample':
+                for j in range(len(header)):
+                    if header[j] == 'Sample':
                         newline.append(sample)
-                    elif header[i] in d:
-                        newline.append(d[header[i]])
+                    elif header[j] in d:
+                        newline.append(d[header[j]])
                     elif header[i] not in d:
                         newline.append('')
                 newfile.write('\t'.join(newline) + '\n')
@@ -1386,6 +1507,57 @@ def concatenate_fusion_files(data, outputfile):
         
     return concatenated_file
 
+
+
+def concatenate_hmf_fusion_files(data, outputfile):
+    '''
+    (str, str) -> None
+    
+    Concatenates all the fusion files into a text outputfile.
+    Returns the path to the concatenated file or the empty string if there is no data files    
+    
+    Parameters
+    ----------
+    - data (dict): Dictionary with files extracted from the processed map file
+    - outputfile (str): Path to the concatenated seg file
+    '''
+
+    # make a list of fusion files
+    fusionfiles = []
+        
+    for donor in data:
+        for sample in data[donor]:
+            file = data[donor][sample]['fusion']
+            if file != 'NA' and os.path.isfile(file):
+                # check if fusion file has data
+                if check_fusion_data(file):
+                    fusionfiles.append(file)
+    
+    if fusionfiles:
+        # get the fusion file header
+        infile = open(fusionfiles[0])
+        header = infile.readline().rstrip().split('\t')
+        infile.close()
+        
+        # write header to outputfile
+        newfile = open(outputfile, 'w')
+        newfile.write('\t'.join(header) + '\n')
+        
+        for i in range(len(fusionfiles)):
+            file = fusionfiles[i]
+            # extract data from file
+            infile = open(file)
+            # skip header
+            h = infile.readline()
+            content = infile.read().rstrip().split('\n')
+            infile.close()
+            for j in content:
+                newfile.write(j + '\n')
+        newfile.close()
+        
+    return outputfile
+
+    
 
 def list_samples_with_expression(data):
     '''
@@ -2196,7 +2368,7 @@ def extract_config_params(config):
     # extract options
     D['Options'] = {}
     for i in list(config['Options'].keys()):
-        if i == 'keep_variants':
+        if i in ['keep_variants', 'preprocess']:
             D['Options'][i] = config['Options'].getboolean(i)
         elif i == 'gamma':
             D['Options'][i] = config['Options'].getint(i)
@@ -2206,7 +2378,9 @@ def extract_config_params(config):
     # extract  parameters
     D['Parameters'] = {}
     for i in list(config['Parameters'].keys()):
-        if '.' in config['Parameters'][i]:
+        if i in ['annotate_cna', 'use_genelist']:
+            D['Parameters'][i] = config['Parameters'].getboolean(i)
+        elif '.' in config['Parameters'][i]:
             D['Parameters'][i] = config['Parameters'].getfloat(i)
         else:
             D['Parameters'][i] = config['Parameters'].getint(i)
@@ -2251,37 +2425,48 @@ def check_configuration(params):
         raise ValueError('ERROR. Missing resources: {0}'.format(', '.join(missing_resources)))
     invalid_resource_files = []
     for i in expected_resources:
-        # genelist is optional and may be None
-        if i == 'genelist' and params['Resources'][i] and os.path.isfile(params['Resources'][i]) == False:
-            invalid_resource_files.append(i)                
-        elif params['Resources'][i] is None or os.path.isfile(params['Resources'][i]) == False:
+        if params['Resources'][i] is None or os.path.isfile(params['Resources'][i]) == False:
             invalid_resource_files.append(i)
     if invalid_resource_files:
         raise ValueError('ERROR. Provide valid path for {0}'.format(', '.join(invalid_resource_files)))
     
     # check options
-    missing_options = [i for i in ['mapfile', 'outdir', 'study', 'center', 'cancer_code', 'keep_variants', 'count', 'gamma'] if params['Options'][i] is None]
+    missing_options = [i for i in ['preprocess', 'outdir', 'study', 'center', 'cancer_code', 'keep_variants', 'count', 'gamma'] if params['Options'][i] is None]
     if missing_options:
         raise ValueError('ERROR. Provide values for {0} in the config'.format(', '.join(missing_options)))
-    # check map file
-    if os.path.isfile(params['Options']['mapfile']) == False:
-        raise ValueError('ERROR: Provide valid path to mapfile in config')
-    # check that bbolean filter parameter is provided
+    if params['Options']['mapfile'] is None and params['Options']['jsonfile'] is None:
+        raise ValueError('ERROR. Provide path for the mapfile or the jsonfile in the config')
+    
+    # check that preprocess is specified 
+    if params['Options']['preprocess'] not in [True, False]:
+        raise ValueError('ERROR. {0} is not a boolean. Use true or false'.format(params['Options']['preprocess']))
+    if params['Options']['preprocess']:
+        if params['Options']['jsonfile'] is None or os.path.isfile(params['Options']['jsonfile']) == False:
+            raise ValueError('ERROR. Provide path for the jsonfile in the config')
+    else:
+        if params['Options']['mapfile'] is None or os.path.isfile(params['Options']['mapfile']) == False:
+            raise ValueError('ERROR. Provide path for the mapfile in the config') 
+    
+    # check that boolean filter parameter is provided
     if params['Options']['keep_variants'] not in [True, False]:
         raise ValueError('ERROR. {0} is not a boolean. Use true or false'.format(params['Options']['keep_variants']))
-            
+    
     # check parameters
-    expected_parameters = ['gain', 'amplification', 'heterozygous_deletion', 'homozygous_deletion', 'minfusionreads']
+    expected_parameters = ['gain', 'amplification', 'heterozygous_deletion', 'homozygous_deletion', 'minfusionreads', 'annotate_cna', 'use_genelist']
     missing_parameters = [i for i in expected_parameters if i not in params['Parameters'].keys()]
     if missing_parameters:
         raise ValueError('ERROR. Missing Parameters: {0}'.format(', '.join(missing_parameters)))
     # check value types
-    for i in ['gain', 'amplification', 'heterozygous_deletion', 'homozygous_deletion', 'minfusionreads']:
-        try:
-            float(params['Parameters'][i])
-        except:
-            raise ValueError('ERROR. {0} is not a number'.format(i))
-      
+    for i in expected_parameters:
+        if i in ['annotate_cna', 'use_genelist']:
+            if params['Parameters'][i] not in [True, False]:
+                raise ValueError('ERROR. {0} is not a boolean. Use true or false'.format(params['Parameters'][i]))
+        else:
+            try:
+                float(params['Parameters'][i])
+            except:
+                raise ValueError('ERROR. {0} is not a number'.format(i))
+            
     # check filters
     expected_filters = ['tglpipe', 'filter_variants', 'depth_filter', 'alt_freq_filter', 'gnomad_af_filter', 'filter_indels']
     missing_filters = [i for i in expected_filters if i not in params['Filters'].keys()]
@@ -2300,14 +2485,12 @@ def check_configuration(params):
             raise ValueError('ERROR. {0} is not a number'.format(i))
 
     # check data types
-    if params['Workflows']['snp'] not in ['vep', 'pave']:
-        raise ValueError('ERROR. Expecting vep or pave for snp')
     if params['Workflows']['expression'] not in ['rsem', 'isofox']:
         raise ValueError('ERROR. Expecting rsem or isofox for expression')
     if params['Workflows']['cna'] not in ['purple', 'sequenza']:
         raise ValueError('ERROR. Expecting purple or sequenza for cna')
-    if params['Workflows']['fusion'] not in ['mavis', 'linx']:
-        raise ValueError('ERROR. Expecting mavis or linx for fusion')
+    if params['Workflows']['fusion'] not in ['mavis', 'hmf']:
+        raise ValueError('ERROR. Expecting mavis or hmf for fusion')
         
     
 
@@ -3144,11 +3327,10 @@ def merge_clinical_files(cbiodir, cbiofiles, excluded_samples):
 
 def check_mapfile(params, mapfile):
     '''
-    (dict, str) -> int
+    (dict, str) -> None
     
-    Check the expected number of columns in the map file
-    and raise a ValueError if the number of columns differ from expected based
-    on the source of data. Returns the number of columns
+    Check the expected number of columns in the map file and the paths of the files
+    and raise a ValueError if the number of columns varies or if some paths are not valid
     
     Parameters
     ----------
@@ -3156,12 +3338,14 @@ def check_mapfile(params, mapfile):
     - mapfile (str): Path to the mapping file
     '''
     
+    files = []
     L = []
     infile = open(mapfile)
     for line in infile:
         line = line.rstrip()
         if line:
             line = line.split(',')
+            files.extend(line[2:])
             L.append(len(line))
     infile.close()
     L = list(set(L))    
@@ -3174,17 +3358,52 @@ def check_mapfile(params, mapfile):
         raise ValueError('Multiple line length detected in {0}. Replace missing values with NA'.format(mapfile))
     else:
         line_length = L[0]
-        if params['Workfows']['cna'] == 'purple':
-            # expecting donor,sample,maf,purity,somatic,expression,fusion
-            # with purity and somatic being purple outputs used to compute the segments
-            if line_length != 7:
-                raise ValueError('Expecting 7 columns: donor,sample,maf,purity,somatic,expression,fusion in {0} with {1}'.format(mapfile, params['Workfows']['cna']))
-        else:
-            if line_length != 6:
-                raise ValueError('Expecting 6 columns: donor,sample,maf,segments,expression,fusion in {0}'.format(mapfile))
+        
+    files = list(set(files))
+    while 'NA' in files:
+        files.remove('NA')
+    if all(map(lambda x: os.path.isfile(x), files)) == False:
+        invalid = list(map(lambda x: os.path.isfile(x), files)).count(False)
+        raise ValueError('{0} files have invalid paths'.format(invalid))
     
-    return line_length
+                                                           
+def check_jsonfile(params, jsonfile):
+    '''
+    (dict, str) -> None
     
+    Check if the data in the json file matches the expected parameters in the config file
+    and raise a ValueError if the data doesn't matched 
+    
+    Parameters
+    ----------
+    - params (dict): Dictionary with options extracted from the config
+    - jsonfile (str): Path to the json file with workflows and data to process to generate the mapping file
+    '''
+    
+    infile = open(jsonfile)
+    data = json.load(infile)
+    infile.close()
+    
+    # make a list of workflow names
+    workflows = []
+    for donor in data:
+        for sample in data[donor]:
+            workflows.extend(data[donor][sample].keys())
+    workflows = list(set(workflows))
+        
+    if params['Workflows']['expression'] == 'rsem' and 'isofox' in workflows:
+        raise ValueError('Expecting expression from rsem but found isofox')
+    if params['Workflows']['expression'] == 'isofox' and 'rsem' in workflows:
+        raise ValueError('Expecting expression from isofox but found rsem')
+    if params['Workflows']['fusion'] == 'mavis' and 'fusion' in workflows:
+        raise ValueError('Expecting fusion from mavis but found hmf')
+    if params['Workflows']['fusion'] == 'hmf' and 'mavis' in workflows:
+        raise ValueError('Expecting fusion from hmf but found mavis')
+    if params['Workflows']['cna'] == 'purple' and 'sequenza' in workflows:
+        raise ValueError('Expecting CNA from purple but found sequenza')                     
+    if params['Workflows']['cna'] == 'sequenza' and 'purple' in workflows:
+        raise ValueError('Expecting CNA from sequenza but found purple')                     
+
     
     
 def parse_mapfile(params, mapfile):
@@ -3208,10 +3427,16 @@ def parse_mapfile(params, mapfile):
     cols = L[0]    
     
     if params['Workflows']['cna'] != 'purple':
-        assert cols == 7
+        if params['Workflows']['fusion'] == 'mavis':
+            assert cols == 6
+        else:
+            assert cols == 7
     else:
-        assert cols == 6
-        
+        if params['Workflows']['fusion'] == 'mavis':
+            assert cols == 7
+        else:
+            assert cols == 8
+          
     D = {}
     
     for i in content:
@@ -3219,13 +3444,23 @@ def parse_mapfile(params, mapfile):
         sample = i[1]
         maf = i[2]
         if params['Workflows']['cna'] != 'purple':
-            segments = i[3]
-            expression = i[4]
-            fusion = i[5]
+            if params['Workflows']['fusion'] == 'mavis':
+                segments = i[3]
+                expression = i[4]
+                fusion = i[5]
+            else:
+                segments = i[3]
+                expression = i[4]
+                fusion = i[5:]
         else:
-            segments = i[3:5]
-            expression = i[5]
-            fusion = i[6]
+            if params['Workflows']['fusion'] == 'mavis':
+                segments = i[3:5]
+                expression = i[5]
+                fusion = i[6]
+            else:
+                segments = i[3:5]
+                expression = i[5]
+                fusion = i[6:]
         if donor in D:
             D[donor] = {}
         assert sample not in D[donor]
@@ -3304,42 +3539,296 @@ def get_sequenza_segfile(sampledir, sequenza_zip, gamma):
     return segfile           
     
     
-def preprocess_mapfile(params, mapfile, gamma, outdir):
-    '''
-    (dict, str, int, str) -> str
+# def preprocess_mapfile(params, mapfile, gamma, outdir):
+#     '''
+#     (dict, str, int, str) -> str
     
-    Parse the mapfile and 
+#     Parse and preprocess the mapfile to extract the sequenza segmentation file 
+#     for gamma or generate the segmentation file for puprle
+    
+#     Parameters
+#     ----------
+#     - params (dict): Dictionary with options extracted from the config
+#     - mapfile (str): Path to the mapping file
+#     - gamma (str): Gamma value of the sequenza workflow
+#     - outdir (str): Path to the output directory 
+#     '''
+
+#     processed_map = os.path.join(outdir, 'preprocessed_map.csv')
+#     newfile = open(processed_map, 'w')
+
+#     data = parse_mapfile(params, mapfile)
+
+#     for donor in data:
+#         for sample in data[donor]:
+#             # fusion may come from mavis or linx + isofox
+#             if params['Workflows']['fusion'] == 'mavis':
+#                 L = [donor, sample, 'NA', 'NA', 'NA', 'NA']
+#             else:
+#                 L = [donor, sample, 'NA', 'NA', 'NA', 'NA', 'NA']
+#             segdir = os.path.join(outdir, 'segdir')   
+#             if params['Workflows']['cna'] == 'sequenza':
+#                 # extract the seg file corresponding to gamma
+#                 # create a sequenza directory
+#                 sequenzadir =  os.path.join(segdir, 'sequenza')
+#                 donordir = os.path.join(sequenzadir, donor)
+#                 sampledir = os.path.join(donordir, sample)
+#                 os.makedirs(sampledir, exist_ok=True)
+#                 # get the sequenza seg file
+#                 segfile = get_sequenza_segfile(sampledir, data[donor][sample]['segments'], gamma)
+#                 L[3] = segfile       
+#             elif params['Workflows']['cna'] == 'purple':
+#                 # create a purple directory
+#                 # generate segmentation file for purple
+#                 purpledir =  os.path.join(segdir, 'purple')
+#                 donordir = os.path.join(purpledir, donor)
+#                 sampledir = os.path.join(donordir, sample)
+#                 os.makedirs(sampledir, exist_ok=True)
+#                 #get the cnv and purity files
+#                 cnv_file = data[donor][sample]['segments'][0]
+#                 purity_file = data[donor][sample]['segments'][1]
+#                 # generate segmentation file from purple
+#                 outputfile = os.path.join(sampledir, '{0}.purple.seg'.format(sample))
+#                 generate_purple_segmentation(cnv_file, purity_file, sample, outputfile)
+#                 L[3] = outputfile
+                
+#             # replace files for other data type
+#             L[2] = data[donor][sample]['snv']
+#             L[4] = data[donor][sample]['expression']
+#             if params['Workflows']['fusion'] == 'mavis':
+#                 L[5] = data[donor][sample]['fusion']
+#             else:
+#                 L[5] = data[donor][sample]['fusion'][0]
+#                 L[6] = data[donor][sample]['fusion'][1]
+#             newfile.write(','.join(L) + '\n')
+
+#     newfile.close()
+#     return processed_map
+
+
+
+
+
+def convert_linx_to_fusion(linx_file, sample, seq_center, entrez_genes):
+    '''
+    (str, str, str, dict) -> list
+    
+    Returns a list of fusion events extracted from the linx fusion file and
+    formated to match the data_SV.txt cbioportal format
+    
+    Parameters
+    ----------
+    - linx_file (str): Path to the linx fusion output file
+    - sample (str): Sample Id
+    - seq_center (str): Genomic Center
+    - entrez_genes (dict): Dictionary mapping Hugo gene names and entrez gene ids
+    '''
+    
+    L = []   
+
+    infile = open(linx_file)
+    linx_header = infile.readline().rstrip().split('\t')
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split('\t')
+            site1_hugo_symbol = line[linx_header.index('geneStart')]
+            site2_hugo_symbol = line[linx_header.index('geneEnd')]
+            if site1_hugo_symbol in entrez_genes:
+                site1_entrez_geneid = entrez_genes[site1_hugo_symbol]
+            else:
+                site1_entrez_geneid = 'NA'
+            if site2_hugo_symbol in entrez_genes:
+                site2_entrez_geneid = entrez_genes[site2_hugo_symbol]
+            else:
+                site2_entrez_geneid = 'NA'
+            SV_status = 'SOMATIC'
+            center = seq_center
+            event_info = site1_hugo_symbol + '_' + site2_hugo_symbol              
+            DNA_support = 'yes'
+            RNA_support = 'no'
+            method = 'linx'
+            phased = line[linx_header.index('phased')]
+            if phased == 'OUT_OF_FRAME':
+                site2_effect_on_frame = 'Out-of-frame'
+            elif phased == 'INFRAME':
+                site2_effect_on_frame = 'In_frame'
+            # find examples of frameshit to check annotation
+            elif 'frame' in phased.lower() and 'shift' in phased.lower():
+                site2_effect_on_frame = 'Frameshift'
+            else:
+                site2_effect_on_frame = phased
+            fusion_status = 'unknown'
+            
+            fusion = [sample, site1_hugo_symbol, site1_entrez_geneid,
+                 site2_hugo_symbol, site2_entrez_geneid, SV_status,
+                 center, event_info, DNA_support, RNA_support, method,
+                 site2_effect_on_frame, fusion_status]
+            L.append(fusion)
+    
+    infile.close()
+    
+    return L
+    
+    
+def convert_isofox_to_fusion(isofox_file, sample, seq_center, entrez_genes):    
+    '''
+    (str, str, str, dict) -> list
+    
+    Returns a list of fusion events extracted from the isofox fusion file and
+    formated to match the data_SV.txt cbioportal format
+    
+    Parameters
+    ----------
+    - isofox_file (str): Path to the linx fusion output file
+    - sample (str): Sample Id
+    - seq_center (str): Genomic Center
+    - entrez_genes (dict): Dictionary mapping Hugo gene names and entrez gene ids
+    '''
+    
+    L = []   
+
+    infile = open(isofox_file)
+    isofox_header = infile.readline().rstrip().split(',')
+    for line in infile:
+        line = line.rstrip()
+        if line:
+            line = line.split(',')
+            valid = line[isofox_header.index('Valid')]
+            if valid == 'true':
+                site1_hugo_symbol = line[isofox_header.index('GeneNameUp')]
+                site2_hugo_symbol = line[isofox_header.index('GeneNameDown')]
+                if site1_hugo_symbol in entrez_genes:
+                    site1_entrez_geneid = entrez_genes[site1_hugo_symbol]
+                else:
+                    site1_entrez_geneid = 'NA'
+                if site2_hugo_symbol in entrez_genes:
+                    site2_entrez_geneid = entrez_genes[site2_hugo_symbol]
+                else:
+                    site2_entrez_geneid = 'NA'
+                SV_status = 'SOMATIC'
+                center = seq_center
+                event_info = site1_hugo_symbol + '_' + site2_hugo_symbol              
+                DNA_support = 'no'
+                RNA_support = 'yes'
+                method = 'isofox'
+                site2_effect_on_frame = 'Frameshift'
+                fusion_status = 'unknown'
+                
+                fusion = [sample, site1_hugo_symbol, site1_entrez_geneid,
+                         site2_hugo_symbol, site2_entrez_geneid, SV_status,
+                         center, event_info, DNA_support, RNA_support, method,
+                         site2_effect_on_frame, fusion_status]
+                L.append(fusion)
+        
+    infile.close()
+        
+    return L
+    
+
+
+def match_hugo_geneid(entcon):
+    '''
+    (str) - > dict
+    
+    Returns a dictionary with Hugo gene names matching entrez gene ids
+    
+    Parameters
+    ----------
+    - entcon (str): Path to the file with hugo gene names and entrez gene ids
+    '''
+     
+    D = {}
+
+    infile = open(entcon)
+    header = infile.readline()
+    for line in infile:
+        line = line.strip()
+        if line:
+            line = line.split('\t')
+            hugo = line[0]
+            geneid = line[1]
+            assert hugo not in D
+            D[hugo] = geneid
+
+    infile.close()
+    
+    return D
+
+
+def preprocess_mapfile(params, jsonfile, gamma, outdir):
+    '''
+    (dict, str, int, str) -> dict
+    
+    Preprocess the json file to extract the sequenza segmentation file 
+    for gamma or generate the segmentation file for puprle, and convert the linx
+    and isofox fusion records to records compatible to the cbioportal SV file format
+    if present
     
     Parameters
     ----------
     - params (dict): Dictionary with options extracted from the config
-    - mapfile (str): Path to the mapping file
+    - jsonfile (str): Path to the mapping file
     - gamma (str): Gamma value of the sequenza workflow
     - outdir (str): Path to the output directory 
     '''
 
-    processed_map = os.path.join(outdir, 'preprocessed_map.csv')
-    newfile = open(processed_map, 'w')
-
-    data = parse_mapfile(params, mapfile)
-
-    # link the files to the data folders
-
+    infile = open(jsonfile)
+    data = json.load(infile)
+    infile.close()
+    
+    # match Hugo gene symbols with entrez gene ids
+    entrez_genes = match_hugo_geneid(params['Resources']['entcon'])
+     
+    # get the directory for CNA data
+    segdir = os.path.join(outdir, 'segdir')   
+    # get the directory for fusion data
+    fusdir = os.path.join(outdir, 'fusdir')
+    # header of the fusion file
+    fusion_header = ['Sample_Id', 'Site1_Hugo_Symbol', 'Site1_Entrez_Gene_Id',
+                     'Site2_Hugo_Symbol', 'Site2_Entrez_Gene_Id', 
+                     'SV_Status', 'Center', 'Event_Info', 'DNA_support',
+                     'RNA_support', 'Method', 'Site2_Effect_On_Frame',
+                     'Fusion_Status']
+    
+    
+    # create a dictionary to store the new data
+    D = {}
+    
     for donor in data:
+        D[donor] = {}
         for sample in data[donor]:
-            L = [donor, sample, 'NA', 'NA', 'NA', 'NA']
-            segdir = os.path.join(outdir, 'segdir')   
-            if params['Workflows']['cna'] == 'sequenza':
-                # extract the seg file corresponding to gamma
-                # create a sequenza directory
-                sequenzadir =  os.path.join(segdir, 'sequenza')
-                donordir = os.path.join(sequenzadir, donor)
-                sampledir = os.path.join(donordir, sample)
-                os.makedirs(sampledir, exist_ok=True)
-                # get the sequenza seg file
-                segfile = get_sequenza_segfile(sampledir, data[donor][sample]['segments'], gamma)
-                L[3] = segfile       
-            elif params['Workflows']['cna'] == 'purple':
+            D[donor][sample] = {}
+            # check if snv data
+            workflows = list(data[donor][sample].keys())
+            if any(list(map(lambda x: x.lower().startswith('varianteffectpredictor'), workflows))):
+                # get the snv file
+                for i in workflows:
+                    if i.lower().startswith('varianteffectpredictor'):
+                        snvfile = data[donor][sample][i]
+                        break
+                        D[donor][sample]['snv'] = snvfile              
+            else:
+                D[donor][sample]['snv'] = 'NA'
+    
+            # check if cna data, extract gamma segents from sequenza 
+            #or generate segmentation file for purple
+            if any(list(map(lambda x: x.lower().startswith('sequenza'), workflows))):
+                # get the sequenza zip file
+                for i in workflows:
+                    if i.lower().startswith('sequenza'):
+                        sequenzafile = data[donor][sample][i]
+                        break
+                        # extract the seg file corresponding to gamma
+                        # create a sequenza directory
+                        sequenzadir =  os.path.join(segdir, 'sequenza')
+                        donordir = os.path.join(sequenzadir, donor)
+                        sampledir = os.path.join(donordir, sample)
+                        os.makedirs(sampledir, exist_ok=True)
+                        # get the sequenza seg file
+                        segfile = get_sequenza_segfile(sampledir, sequenzafile, gamma)
+                        D[donor][sample]['segments'] = segfile
+            elif any(list(map(lambda x: x.lower().startswith('purple'), workflows))):
                 # create a purple directory
                 # generate segmentation file for purple
                 purpledir =  os.path.join(segdir, 'purple')
@@ -3347,22 +3836,86 @@ def preprocess_mapfile(params, mapfile, gamma, outdir):
                 sampledir = os.path.join(donordir, sample)
                 os.makedirs(sampledir, exist_ok=True)
                 #get the cnv and purity files
-                cnv_file = data[donor][sample]['segments'][0]
-                purity_file = data[donor][sample]['segments'][1]
+                cnv_file = data[donor][sample]['purple']['cnv']
+                purity_file = data[donor][sample]['purple']['purity']
                 # generate segmentation file from purple
                 outputfile = os.path.join(sampledir, '{0}.purple.seg'.format(sample))
                 generate_purple_segmentation(cnv_file, purity_file, sample, outputfile)
-                L[3] = outputfile
+                D[donor][sample]['segments'] = outputfile
+            else:
+                D[donor][sample]['segments'] = 'NA'
+            
+            # get the expression data
+            if 'rsem' in workflows:
+                D[donor][sample]['expression'] = data[donor][sample]['rsem']
+            elif 'isofox' in workflows:
+                D[donor][sample]['expression'] = data[donor][sample]['isofox']
+            else:
+                D[donor][sample]['expression'] = 'NA'
+            
+            # get the fusion data
+            if 'mavis' in workflows:
+                D[donor][sample]['fusion'] = {'mavis': data[donor][sample]['mavis']}
+            elif 'fusion' in workflows:
+                # extract relevant fields and generate fusion file
+                if data[donor][sample]['fusion']['linx'] != 'NA' and os.path.isfile(data[donor][sample]['fusion']['linx']):
+                    linx_fusion = convert_linx_to_fusion(data[donor][sample]['fusion']['linx'], sample, params['Options']['center'], entrez_genes)
+                else:
+                    linx_fusion = []
+                if data[donor][sample]['fusion']['isofox'] != 'NA' and os.path.isfile(data[donor][sample]['fusion']['isofox']):
+                    isofox_fusion = convert_isofox_to_fusion(data[donor][sample]['fusion']['isofox'], sample, params['Options']['center'], entrez_genes)  
+                else:
+                    isofox_fusion = []
+                fusion_data = linx_fusion + isofox_fusion
                 
-            # replace files for other data type
-            L[2] = data[donor][sample]['snv']
-            L[4] = data[donor][sample]['expression']
-            L[5] = data[donor][sample]['fusion']
-            newfile.write(','.join(L) + '\n')
+                if fusion_data:
+                    outputfile = sample + 'fusion'
+                    if linx_fusion:
+                        outputfile = outputfile + '.linx'
+                    if isofox_fusion:
+                        outputfile = outputfile + '.isofox'
+                    outputfile = outputfile + '.txt'                    
+                    outputfile = os.path.join(fusdir, outputfile)
+                    newfile = open(outputfile, 'w')
+                    newfile.write('\t'.join(fusion_header) + '\n')
+                    for i in fusion_data:
+                        newfile.write('\t'.join(i) + '\n')
+                    newfile.close()
+                    D[donor][sample]['fusion'] = outputfile               
+                else:
+                    D[donor][sample]['fusion'] = 'NA'
+        
+            
+    return D
 
+
+
+def write_mapfile(processed_data, outputfile):
+    '''
+    (dict, str) -> None
+
+    Write the mapping file with the procesed data 
+    
+    Paramaters
+    ----------
+    - processed_data (dict): Processed data (segmentation files, SV files) for all donors and samples
+    - outputfile (str): Path to the outputfile
+    '''
+    
+    newfile = open(outputfile, 'w')
+    for donor in processed_data:
+        for sample in processed_data[donor]:
+            L = [donor,
+                 sample,
+                 processed_data[donor][sample]['snv'],
+                 processed_data[donor][sample]['segments'],
+                 processed_data[donor][sample]['expression'],
+                 processed_data[donor][sample]['fusion']]
+            newfile.write(','.join(L) + '\n')        
     newfile.close()
-    return processed_map
 
+
+    
 
 def make_import_folder(args):
     '''
@@ -3392,32 +3945,44 @@ def make_import_folder(args):
     check_configuration(params)
     print('read and checked config')
     
-    # check mapfile
-    mapfile = params['Options']['mapfile']
-    num_columns = check_mapfile(params, mapfile)
-    print('checked map file: {0} columns'.format(num_columns))
-        
     # create output directory and output sub-folders. remove output directory if it exists
     outdir = params['Options']['outdir']
     cbiodir, casedir, suppdir = create_output_directories(outdir)
     print('created output directories')
-
-    # copy config file to out directory
-    copy_resource(args.config, outdir)
-    copy_resource(mapfile, outdir)
-    print('copied {0} to {1}'.format(os.path.basename(args.config), outdir))
-    print('copied {0} to {1}'.format(os.path.basename(mapfile), outdir))
-     
+    
     # create input directories for each data type 
     mafdir, segdir, gepdir, fusdir = create_input_directories(outdir)
     print('created input directories')
     
-    # preprocess the map file; extract sequenza gamma segments or generate purple segment files
-    processed_mapfile = preprocess_mapfile(params, mapfile, params['Options']['gamma'], outdir)
-    print('preprocessed map file: {0}'.format(processed_mapfile))
-
+    # check if data needs to be preprocessed to generate the mapping file
+    if params['Options']['preprocess']:
+        # preprocess the json file; extract sequenza gamma segments or generate purple segment files
+        # extract relevant fields from linx and isofox fusion files
+        jsonfile = params['Options']['jsonfile']
+        # check that data in json file matched the expected data type in the config
+        check_jsonfile(params, jsonfile)
+        processed_data = preprocess_mapfile(params, jsonfile, params['Options']['gamma'], outdir)
+        # write outfile
+        mapfile = os.path.join(outdir, 'map.csv')
+        write_mapfile(processed_data, mapfile)
+        print('preprocessed map file: {0}'.format(mapfile))
+    else:
+        mapfile = params['Options']['mapfile']
+    
+    # check mapfile
+    check_mapfile(params, mapfile)
+    print('checked data type in map file')
+        
+    # copy config file and map file to out directory
+    copy_resource(args.config, outdir)
+    print('copied {0} to {1}'.format(os.path.basename(args.config), outdir))
+    # copy map file to outdir of mapfile wasn't generated from the jsonfile
+    if params['Options']['preprocess'] == False and params['Options']['mapfile']:
+        copy_resource(mapfile, outdir)
+        print('copied {0} to {1}'.format(os.path.basename(mapfile), outdir))
+    
     # check that input maf files, if any, have the same format and the same header
-    check_input_mafs(processed_mapfile)
+    check_input_mafs(mapfile)
     print('checked maf headers')
     
     # check genome version in the maf files, if provided
@@ -3436,7 +4001,13 @@ def make_import_folder(args):
     cancer_code = params['Options']['cancer_code']
     check_cancer_type(cancer_code)
     print('checked cancer code')
-
+    
+    # check if gene list is used to restrict expression and CNA calls
+    if params['Parameters']['use_genelist']:
+        genelist = params['Resources']['genelist']
+    else:
+        genelist = None
+    
     # write meta study and clinical files
     project_name = params['Options']['project_name']
     write_meta_study(os.path.join(cbiodir, 'meta_study.txt') ,
@@ -3449,39 +4020,45 @@ def make_import_folder(args):
     print('wrote study and clinical metadata')    
     
     # write cases
-    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), project_name, processed_mapfile, 'seq')
-    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), project_name, processed_mapfile, 'rna')
-    write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, processed_mapfile, 'cna')
-    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, processed_mapfile, 'cna_seq')
-    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, processed_mapfile, 'cna_seq_rna')
-    write_cases(os.path.join(casedir, 'cases_sv.txt'), project_name, processed_mapfile, 'sv')
+    write_cases(os.path.join(casedir, 'cases_sequenced.txt'), project_name, mapfile, 'seq')
+    write_cases(os.path.join(casedir, 'cases_rna_seq_mrna.txt'), project_name, mapfile, 'rna')
+    write_cases(os.path.join(casedir, 'cases_cna.txt'), project_name, mapfile, 'cna')
+    write_cases(os.path.join(casedir, 'cases_cnaseq.txt'), project_name, mapfile, 'cna_seq')
+    write_cases(os.path.join(casedir, 'cases_3way_complete.txt'), project_name, mapfile, 'cna_seq_rna')
+    write_cases(os.path.join(casedir, 'cases_sv.txt'), project_name, mapfile, 'sv')
     print('wrote cases')
 
     # write patient clinical information
     clinical_outputfile = os.path.join(cbiodir, 'data_clinical_patients.txt')
     center = params['Options']['center']
-    write_patient_minimal_clinical_information(clinical_outputfile, processed_mapfile, center)
+    write_patient_minimal_clinical_information(clinical_outputfile, mapfile, center)
     
     # get the user defined sample clinical information
     clinical_info = get_clinical_data(args.clinical) if args.clinical else None
     clinical_outputfile = os.path.join(cbiodir, 'data_clinical_samples.txt')
-    write_sample_minimal_clinical_information(clinical_outputfile, processed_mapfile, center, sample_info = clinical_info)
+    write_sample_minimal_clinical_information(clinical_outputfile, mapfile, center, sample_info = clinical_info)
     print('wrote clinical information')
     
     # write clinical input file for oncokb-annotator
     clinical_oncokb = os.path.join(suppdir, 'oncokb_clinical_info.txt')
-    write_clinical_oncokb(clinical_oncokb, processed_mapfile, cancer_code)
+    write_clinical_oncokb(clinical_oncokb, mapfile, cancer_code)
     print('wrote oncoKb clinical information') 
+    
     
     # concatenate data files if they exist  
     # parse processed map file
-    data = parse_processed_mapfile(processed_mapfile)
+    data = parse_processed_mapfile(mapfile)
     # concatenate VEP mafiles
     mutation_file = concatenate_maf_files(data, os.path.join(mafdir, 'all_mutations.maf.txt'))
     # concatenate segmentation files
     segfile = concatenate_seg_files(data, os.path.join(segdir, 'input.seg.txt'))
+    
     # concatenate fusion files
-    fusfile = concatenate_fusion_files(data, os.path.join(fusdir, 'input.fus.txt'))
+    if params['Workflows']['fusion'] == 'mavis':
+        fusfile = concatenate_fusion_files(data, os.path.join(fusdir, 'input.fus.txt'))
+    elif params['Workflows']['fusion'] == 'hmf':
+        fusfile = concatenate_hmf_fusion_files(data, os.path.join(fusdir, 'input.fus.txt'))
+    
     # concatenate expression files
     # extract and concatenate fpkm from gep files
     if params['Workflows']['expression'] == 'rsem':
@@ -3492,15 +4069,6 @@ def make_import_folder(args):
         gepfile = concatenate_expression_from_isofox_files(data, os.path.join(gepdir, 'input.expression.txt'))
     print('concatenated data files')
 
-    
-    
-    #### to do:
-    
-    ### concantenate hmf mafs
-    ### concatenate hmf fusion
-    ### concatenate hmf segments
-    
-       
     # filter maf files and write metadata
     # define maffile, output of MafAnnotator
     filter_variants = params['Filters']['filter_variants']
@@ -3583,8 +4151,7 @@ def make_import_folder(args):
     heterozygous_deletion = params['Parameters']['heterozygous_deletion']
     homozygous_deletion = params['Parameters']['homozygous_deletion']
     oncolist = params['Resources']['oncolist']
-    genelist = params['Resources']['genelist']
-       
+           
     # generate CNA data and metadata files if input segmentation file exists
     if segfile:
         # generate metadata files
@@ -3642,25 +4209,32 @@ def make_import_folder(args):
         # write SV metadata
         write_metadata(os.path.join(cbiodir, 'meta_sv.txt'), project_name, 'sv', genome)
         print('wrote SV metadata')
-        # process the fusion file
-        fusion_cbio = preProcFus(fusfile, minfusionreads, entcon)
-        # write fusion file
-        data_fusion = os.path.join(cbiodir, "data_fusions.txt")
-        fusion_cbio.to_csv(data_fusion, sep="\t", index=False)
-        print('wrote fusion data files')
-        # convert fusion file to SV format
-        # get the path to sv file
-        data_sv = os.path.join(cbiodir, "data_sv.txt")
-        # convert to sv file
-        convert_fusion_to_sv(data_fusion, data_sv)
-        # move fusion file to supplementary directory
-        if os.path.isfile(data_fusion):
-            new_data_fusion = os.path.join(suppdir, os.path.basename(data_fusion))
-            os.rename(data_fusion, new_data_fusion)     
-                    
+        
+        # check the origin if fusion data
+        if params['Options']['fusion'] == 'mavis':
+            # process the fusion file
+            fusion_cbio = preProcFus(fusfile, minfusionreads, entcon)
+            # write fusion file
+            data_fusion = os.path.join(cbiodir, "data_fusions.txt")
+            fusion_cbio.to_csv(data_fusion, sep="\t", index=False)
+            print('wrote fusion data files')
+            # convert fusion file to SV format
+            # get the path to sv file
+            data_sv = os.path.join(cbiodir, "data_sv.txt")
+            # convert to sv file
+            convert_fusion_to_sv(data_fusion, data_sv)
+            # move fusion file to supplementary directory
+            if os.path.isfile(data_fusion):
+               new_data_fusion = os.path.join(suppdir, os.path.basename(data_fusion))
+               os.rename(data_fusion, new_data_fusion)     
+        elif params['Options']['fusion'] == 'hmf':
+            data_fusion = preProc_hmf_fusion(fusfile)
+            data_sv = os.path.join(cbiodir, "data_sv.txt")
+            write_sv_file(data_fusion, data_sv)   
+            
     # annonate CNA files with oncoKb for supplementary interpretation data
     # check that CNA data file is generated
-    if args.annotate_cna:
+    if params['Parameters']['annotate_cna']:
         if os.path.isfile(os.path.join(suppdir, 'data_CNA_short.txt')):
             cna_annotation = subprocess.call('CnaAnnotator -i {0} -o {1} -c {2} -b {3}'.format(os.path.join(suppdir, 'data_CNA_short.txt'), os.path.join(suppdir, 'data_CNA_oncoKB.txt'), os.path.join(suppdir, 'oncokb_clinical_info.txt'), oncokb_token), shell = True)  
             if cna_annotation:
@@ -3808,91 +4382,12 @@ def merge_import_folder(args):
         merge_expression_CNA_files(cbiodir, cbiofiles, excluded_samples)
         print('Merged expression and CNA data files')
 
-        
         # remove case files if datafiles are not present because samples were excluded
         remove_merged_metafiles(cbiodir)
         
-            
-        # THINGS TO DO
-        # allow clinical merging of clinical files with different headers:
-            # clinical_samples and clinical_patients may have custom fields: 
-            # enable merging of clinical files with different hears and fields
-            # do not include clinical data files when checking for header
-
-
     print('Success! {0} import folders have been merged into {1}'.format(len(import_folders), cbiodir))
 
  
-
-def generate_mapfile(args):
-    '''
-    (str, str)
-    
-    Generates a map file with data required for creating the cbioportal import folder
-       
-    Parameters
-    ----------
-    - outdir (str): Path to the output directory
-    - input_data (str): Path to the json file with input data
-    - gamma (str): Gamma value of the sequenza workflow. Default is 500
-    '''
-    
-    infile = open(args.input_data)
-    data = json.load(infile)
-    infile.close()
-    
-    # create directories
-    os.makedirs(args.outdir, exist_ok=True)
-        
-    mapfile = os.path.join(args.outdir, 'map.csv')
-    newfile = open(mapfile, 'w')
-        
-    for donor in data:
-        for sample in data[donor]:
-            L = [donor,sample,'NA','NA','NA','NA']
-            for workflow in data[donor][sample]:
-                if 'sequenza' in workflow.lower():
-                    # create a sequenza directory
-                    sequenzadir =  os.path.join(args.outdir, 'sequenza')
-                    donordir = os.path.join(sequenzadir, donor)
-                    sampledir = os.path.join(donordir, sample)
-                    os.makedirs(sampledir, exist_ok=True)
-                    if os.path.isfile(data[donor][sample][workflow]):
-                        with zipfile.ZipFile(data[donor][sample][workflow], 'r') as zipref:
-                            zipref.extractall(sampledir)
-                    # get the seg file of interest
-                    segfile = glob.glob(sampledir +'/gammas/{0}/*.seg'.format(args.gamma))
-                    assert len(segfile) == 1
-                    segfile = segfile[0]
-                    assert os.path.isfile(segfile)
-                    L[3] = segfile       
-                elif 'purple' in workflow.lower():
-                    # create a purple directory
-                    purpledir =  os.path.join(args.outdir, 'purple')
-                    donordir = os.path.join(purpledir, donor)
-                    sampledir = os.path.join(donordir, sample)
-                    os.makedirs(sampledir, exist_ok=True)
-                    #get the cnv and purity files
-                    cnv_file = data[donor][sample][workflow]['cnv']
-                    purity_file = data[donor][sample][workflow]['purity']
-                    # generate segmentation file from purple
-                    outputfile = os.path.join(sampledir, '{0}.purple.seg'.format(sample))
-                    generate_purple_segmentation(cnv_file, purity_file, sample, outputfile)
-                    L[3] = outputfile
-                elif 'varianteffectpredictor' in workflow.lower():
-                    L[2] = data[donor][sample][workflow]
-                elif 'rsem' in workflow.lower():
-                    L[4] = data[donor][sample][workflow]
-                elif 'mavis' in workflow.lower():
-                    L[5] = data[donor][sample][workflow]
-            newfile.write(','.join(L) + '\n')
-
-
-    newfile.close()
- 
-
-
-
 if __name__ == '__main__':
 
     # create parser
@@ -3904,7 +4399,6 @@ if __name__ == '__main__':
     g_parser = subparsers.add_parser('generate', help="Generate cbio import folder")
     g_parser.add_argument('-cf', '--Config', dest='config', help='Path to the config file', required = True)
     g_parser.add_argument('-cl', '--Clinical', dest='clinical', help='Path to the sample clinical file')
-    g_parser.add_argument('--annotate_cna', dest='annotate_cna', action='store_true', help='Annotate supplementary CNA data if True')
     g_parser.set_defaults(func=make_import_folder)
     
     # merge import folders
@@ -3925,13 +4419,6 @@ if __name__ == '__main__':
     mg_parser.add_argument('-excludeFile', dest='exclude_file', help='Path to file with samples to exclude')
     mg_parser.set_defaults(func=merge_import_folder)
         
-    # generate maping file
-    m_parser = subparsers.add_parser('map', help="Generate map file")
-    m_parser.add_argument('-o', '--outdir', dest='outdir', help='Path to the output directory', required = True)
-    m_parser.add_argument('-i', '--input_data', dest='input_data', help='Path to the json file with input data', required = True)
-    m_parser.add_argument('-g', '--gamma', dest='gamma', default='500', help='Gamma value of the sequenza output. Default is 500')
-    m_parser.set_defaults(func=generate_mapfile)
-    
     # get arguments from the command line
     args = parser.parse_args()
     # pass the args to the default function
