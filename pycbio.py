@@ -196,7 +196,7 @@ def split_column_take_max(df, columns):
     return df
 
 
-def preProcFus(datafile, readfilt, entrfile):
+def preProcFus(datafile, readfilt, entrfile, genomic_center):
     '''
     Preprocesses the fusion input data and formats it for CBioPortal output. 
     Parameters
@@ -204,6 +204,7 @@ def preProcFus(datafile, readfilt, entrfile):
     - datafile (str) : Path to the input fusion data file
     - readfilt (int) : Minimum number of reads for fusion calls
     - entrfilw (str) : Path to the Entrez gene ID file
+    - genomic_center (str): Sequencing center from the config
     Returns
     --------
     - df_cbio (pd.DataFrame) : Processed and formatted data
@@ -250,10 +251,14 @@ def preProcFus(datafile, readfilt, entrfile):
     data_dedup = pd.merge(data_dedup, entr, how='left', left_on='gene2_aliases', right_on='Hugo_Symbol', suffixes=('.x', '.y'))
 
     # add some missing columns
-    data_dedup['DNA_support'] = 'no'
-    data_dedup['RNA_support'] = 'yes'
-    data_dedup['Center'] = 'TGL'
-    data_dedup['Frame'] = 'frameshift'
+    data_dedup.loc[data_dedup['tools'] == 'starfusion', 'DNA_support'] = 'no'
+    data_dedup.loc[data_dedup['tools'] == 'starfusion', 'RNA_support'] = 'yes'
+    data_dedup.loc[data_dedup['tools'] == 'arriba', 'DNA_support'] = 'no'
+    data_dedup.loc[data_dedup['tools'] == 'arriba', 'RNA_support'] = 'yes'
+    data_dedup.loc[data_dedup['tools'] == 'delly', 'DNA_support'] = 'yes'
+    data_dedup.loc[data_dedup['tools'] == 'delly', 'RNA_support'] = 'no'
+    data_dedup['Center'] = genomic_center
+    data_dedup['Frame'] = 'Frameshift'
     data_dedup['Fusion_Status'] = 'unknown'
 
     # write out the nice header 
@@ -4213,7 +4218,7 @@ def make_import_folder(args):
         # check the origin if fusion data
         if params['Options']['fusion'] == 'mavis':
             # process the fusion file
-            fusion_cbio = preProcFus(fusfile, minfusionreads, entcon)
+            fusion_cbio = preProcFus(fusfile, minfusionreads, entcon, center)
             # write fusion file
             data_fusion = os.path.join(cbiodir, "data_fusions.txt")
             fusion_cbio.to_csv(data_fusion, sep="\t", index=False)
