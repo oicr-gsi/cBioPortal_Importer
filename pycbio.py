@@ -2282,45 +2282,6 @@ def convert_fusion_to_sv(fusion_file, sv_file):
     newfile.close()
     
 
-
-# def get_sample_info(clinical_samples, outputfile):
-#     '''
-#     (str, str) -> None
-    
-#     Write clinical data for samples compatible with IGV
-    
-#     Parameters
-#     ----------
-#     - clinical_samples (str): Path to the file with clinical samples information
-#     - outputfile (str): Path to the outputfile with content re-formatted for IGV
-#     '''
-    
-#     infile = open(clinical_samples)
-#     # find the header, skip commented lines
-#     samples = []
-#     for line in infile:
-#         if not line.startswith('#'):
-#             if line.startswith('PATIENT_ID'):
-#                 header = line
-#             else:
-#                 samples.append(line.rstrip())
-#     infile.close()
-#     while '' in samples:
-#         samples.remove('')            
-#     for i in range(len(samples)):
-#         samples[i] = samples[i].split('\t')
-#     # edit header
-#     header = header.rstrip().split('\t')
-#     header[0] = 'TRACK_ID'
-#     header[1] = 'PARTICIPANT_ID'
-        
-#     newfile = open(outputfile, 'w')
-#     newfile.write('\t'.join(header) + '\n')
-#     for i in samples:
-#         newfile.write('\t'.join([i[1], i[0]]) + '\n')
-#     newfile.close()
-    
-
 def create_output_directories(outdir):
     '''
     (str) -> (str, str, str)
@@ -2572,23 +2533,6 @@ def check_cancer_type(cancer_code):
         raise ValueError('ERROR. Cancer type is not a valid cancer code defined in OncoTree')
    
     
-    
-# def copy_segmentation_data(cbiodir, suppdir):
-#     '''
-#     (str, str) -> None
-    
-#     Copy file processed segmentation file data_segments.txt from the cbioportal
-#     import folder cbiodir to the supplementary folder suppdir and rename it to data_segments.seg
-    
-#     Parameters
-#     ---------
-#     - cbiodir (str): Path to the cbioportal import folder
-#     - suupdir (str): Path the supplementary folder 
-#     '''
-    
-#     if os.path.isfile(os.path.join(cbiodir, 'data_segments.txt')):
-#         shutil.copy(os.path.join(cbiodir, 'data_segments.txt'), os.path.join(suppdir, 'data_segments.seg'))
-
 
 def get_token(token_file):
     '''
@@ -3543,76 +3487,6 @@ def get_sequenza_segfile(sampledir, sequenza_zip, gamma):
         
     return segfile           
     
-    
-# def preprocess_mapfile(params, mapfile, gamma, outdir):
-#     '''
-#     (dict, str, int, str) -> str
-    
-#     Parse and preprocess the mapfile to extract the sequenza segmentation file 
-#     for gamma or generate the segmentation file for puprle
-    
-#     Parameters
-#     ----------
-#     - params (dict): Dictionary with options extracted from the config
-#     - mapfile (str): Path to the mapping file
-#     - gamma (str): Gamma value of the sequenza workflow
-#     - outdir (str): Path to the output directory 
-#     '''
-
-#     processed_map = os.path.join(outdir, 'preprocessed_map.csv')
-#     newfile = open(processed_map, 'w')
-
-#     data = parse_mapfile(params, mapfile)
-
-#     for donor in data:
-#         for sample in data[donor]:
-#             # fusion may come from mavis or linx + isofox
-#             if params['Workflows']['fusion'] == 'mavis':
-#                 L = [donor, sample, 'NA', 'NA', 'NA', 'NA']
-#             else:
-#                 L = [donor, sample, 'NA', 'NA', 'NA', 'NA', 'NA']
-#             segdir = os.path.join(outdir, 'segdir')   
-#             if params['Workflows']['cna'] == 'sequenza':
-#                 # extract the seg file corresponding to gamma
-#                 # create a sequenza directory
-#                 sequenzadir =  os.path.join(segdir, 'sequenza')
-#                 donordir = os.path.join(sequenzadir, donor)
-#                 sampledir = os.path.join(donordir, sample)
-#                 os.makedirs(sampledir, exist_ok=True)
-#                 # get the sequenza seg file
-#                 segfile = get_sequenza_segfile(sampledir, data[donor][sample]['segments'], gamma)
-#                 L[3] = segfile       
-#             elif params['Workflows']['cna'] == 'purple':
-#                 # create a purple directory
-#                 # generate segmentation file for purple
-#                 purpledir =  os.path.join(segdir, 'purple')
-#                 donordir = os.path.join(purpledir, donor)
-#                 sampledir = os.path.join(donordir, sample)
-#                 os.makedirs(sampledir, exist_ok=True)
-#                 #get the cnv and purity files
-#                 cnv_file = data[donor][sample]['segments'][0]
-#                 purity_file = data[donor][sample]['segments'][1]
-#                 # generate segmentation file from purple
-#                 outputfile = os.path.join(sampledir, '{0}.purple.seg'.format(sample))
-#                 generate_purple_segmentation(cnv_file, purity_file, sample, outputfile)
-#                 L[3] = outputfile
-                
-#             # replace files for other data type
-#             L[2] = data[donor][sample]['snv']
-#             L[4] = data[donor][sample]['expression']
-#             if params['Workflows']['fusion'] == 'mavis':
-#                 L[5] = data[donor][sample]['fusion']
-#             else:
-#                 L[5] = data[donor][sample]['fusion'][0]
-#                 L[6] = data[donor][sample]['fusion'][1]
-#             newfile.write(','.join(L) + '\n')
-
-#     newfile.close()
-#     return processed_map
-
-
-
-
 
 def convert_linx_to_fusion(linx_file, sample, seq_center, entrez_genes):
     '''
