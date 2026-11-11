@@ -1889,7 +1889,7 @@ def concatenate_maf_files(data, outputfile):
                     if line.rstrip() != '':
                         line = line.split('\t')
                         # replace column 'Tumor_Sample_Barcode' with sample name
-                        j = header.index('Tumor_Sample_Barcode')
+                        j = header.split('\t').index('Tumor_Sample_Barcode')
                         line[j] = sample
                         # write to outputfile
                         newfile.write('\t'.join(line))
@@ -2444,7 +2444,7 @@ def check_configuration(params):
             bool(params['Filters'][i])
         except:
             raise ValueError('ERROR. {0} is not a boolean'.format(i))
-    for i in ['depth_filter', 'alt_freq_filter', 'gnomAD_AF_filter']:
+    for i in ['depth_filter', 'alt_freq_filter', 'gnomad_af_filter']:
         try:
             float(params['Filters'][i])
         except:
@@ -3685,8 +3685,8 @@ def preprocess_mapfile(params, jsonfile, gamma, outdir):
                 for i in workflows:
                     if i.lower().startswith('varianteffectpredictor'):
                         snvfile = data[donor][sample][i]
+                        D[donor][sample]['snv'] = snvfile    
                         break
-                        D[donor][sample]['snv'] = snvfile              
             else:
                 D[donor][sample]['snv'] = 'NA'
     
