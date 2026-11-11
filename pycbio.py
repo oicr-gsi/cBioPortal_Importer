@@ -1240,9 +1240,7 @@ def concatenate_seg_files(data, outputfile):
         infile = open(segfiles[0])
         header = infile.readline()
         infile.close()
-        
         concatenated_file = outputfile
-        
         newfile = open(outputfile, 'w')
         newfile.write(header)
         # concatenate segmentation files
@@ -1263,7 +1261,7 @@ def concatenate_seg_files(data, outputfile):
                 content[j][0] = samples[i]
                 content[j] = '\t'.join(content[j])
             # write content of seg file to concatenated file
-            newfile.write('\n'.join(content))
+            newfile.write('\n'.join(content) + '\n')
         newfile.close()        
     else:
         concatenated_file = ''
