@@ -4088,7 +4088,7 @@ def make_import_folder(args):
         print('wrote SV metadata')
         
         # check the origin if fusion data
-        if params['Options']['fusion'] == 'mavis':
+        if params['Workflows']['fusion'] == 'mavis':
             # process the fusion file
             fusion_cbio = preProcFus(fusfile, minfusionreads, entcon, center)
             # write fusion file
@@ -4104,7 +4104,7 @@ def make_import_folder(args):
             if os.path.isfile(data_fusion):
                new_data_fusion = os.path.join(suppdir, os.path.basename(data_fusion))
                os.rename(data_fusion, new_data_fusion)     
-        elif params['Options']['fusion'] == 'hmf':
+        elif params['Workflows']['fusion'] == 'hmf':
             data_fusion = preProc_hmf_fusion(fusfile)
             data_sv = os.path.join(cbiodir, "data_sv.txt")
             write_sv_file(data_fusion, data_sv)   
