@@ -1240,9 +1240,7 @@ def concatenate_seg_files(data, outputfile):
         infile = open(segfiles[0])
         header = infile.readline()
         infile.close()
-        
         concatenated_file = outputfile
-        
         newfile = open(outputfile, 'w')
         newfile.write(header)
         # concatenate segmentation files
@@ -1263,7 +1261,7 @@ def concatenate_seg_files(data, outputfile):
                 content[j][0] = samples[i]
                 content[j] = '\t'.join(content[j])
             # write content of seg file to concatenated file
-            newfile.write('\n'.join(content))
+            newfile.write('\n'.join(content) + '\n')
         newfile.close()        
     else:
         concatenated_file = ''
@@ -1889,7 +1887,7 @@ def concatenate_maf_files(data, outputfile):
                     if line.rstrip() != '':
                         line = line.split('\t')
                         # replace column 'Tumor_Sample_Barcode' with sample name
-                        j = header.index('Tumor_Sample_Barcode')
+                        j = header.split('\t').index('Tumor_Sample_Barcode')
                         line[j] = sample
                         # write to outputfile
                         newfile.write('\t'.join(line))
@@ -2444,7 +2442,7 @@ def check_configuration(params):
             bool(params['Filters'][i])
         except:
             raise ValueError('ERROR. {0} is not a boolean'.format(i))
-    for i in ['depth_filter', 'alt_freq_filter', 'gnomAD_AF_filter']:
+    for i in ['depth_filter', 'alt_freq_filter', 'gnomad_af_filter']:
         try:
             float(params['Filters'][i])
         except:
@@ -3685,8 +3683,8 @@ def preprocess_mapfile(params, jsonfile, gamma, outdir):
                 for i in workflows:
                     if i.lower().startswith('varianteffectpredictor'):
                         snvfile = data[donor][sample][i]
+                        D[donor][sample]['snv'] = snvfile    
                         break
-                        D[donor][sample]['snv'] = snvfile              
             else:
                 D[donor][sample]['snv'] = 'NA'
     
@@ -4090,7 +4088,7 @@ def make_import_folder(args):
         print('wrote SV metadata')
         
         # check the origin if fusion data
-        if params['Options']['fusion'] == 'mavis':
+        if params['Workflows']['fusion'] == 'mavis':
             # process the fusion file
             fusion_cbio = preProcFus(fusfile, minfusionreads, entcon, center)
             # write fusion file
@@ -4106,7 +4104,7 @@ def make_import_folder(args):
             if os.path.isfile(data_fusion):
                new_data_fusion = os.path.join(suppdir, os.path.basename(data_fusion))
                os.rename(data_fusion, new_data_fusion)     
-        elif params['Options']['fusion'] == 'hmf':
+        elif params['Workflows']['fusion'] == 'hmf':
             data_fusion = preProc_hmf_fusion(fusfile)
             data_sv = os.path.join(cbiodir, "data_sv.txt")
             write_sv_file(data_fusion, data_sv)   
